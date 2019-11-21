@@ -9,7 +9,23 @@ Unlike PILCO's [original implementation](http://mlg.eng.cam.ac.uk/pilco/) which 
 In particular, we use `TensorFlow` to avoid the need for hardcoded gradients and scale to GPU architectures. Moreover, we use [`GPflow`](https://github.com/GPflow/GPflow) for Gaussian Process Regression.
 
 The core functionality is tested against the original `MATLAB` implementation.
-
+## Installation
+1. Install venv
+```bash
+virtualenv -p python3 venv
+source venv/bin/activate
+```
+2. Install requirements
+```bash
+pip install -r requirements.txt
+python setup.py develop
+```
+3. You might also need to install openai gym
+```bash
+pip install gym
+```
+4. You might also need to install mujoco [click here](https://www.roboti.us/index.html)
+5. In the case that mujoco and mujoco-py fail to build on macos, change the MacOS SDK to 10.14.sdk
 ## Example of usage
 Before using, or installing, PILCO, you need to have `Tensorflow 1.13.1` installed (either the gpu or the cpu version). It is recommended to install everything in a fresh `conda` environment with `python>=3.7`. Given `Tensorflow`, PILCO can be installed as follows
 ```

@@ -6,3 +6,5 @@ __pycache__
 octave-workspace
 *.egg
 examples/.ipynb_checkpoints/
+venv
+.idea

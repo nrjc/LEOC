@@ -1,1 +1,3 @@
-git+git://github.com/GPflow/GPflow.git@v1.5.0
+tensorflow==1.14.0
+gpflow==1.5.1
+mujoco-py
