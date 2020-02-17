@@ -112,3 +112,34 @@ class RbfController(MGPR):
             m.Y.assign(mean + sigma*np.random.normal(size=m.Y.shape))
             mean = 1; sigma = 0.1
             m.kern.lengthscales.assign(mean + sigma*np.random.normal(size=m.kern.lengthscales.shape))
+
+
+class CombinedController:
+    '''
+    An RBF Controller implemented as a deterministic GP
+    See Deisenroth et al 2015: Gaussian Processes for Data-Efficient Learning in Robotics and Control
+    Section 5.3.2.
+    '''
+    def __init__(self, state_dim, control_dim, num_basis_functions, max_action=None):
+        self.rbc_controller = RbfController(state_dim, control_dim, num_basis_functions, max_action)
+        self.linear_controller = LinearController(state_dim, control_dim, max_action)
+
+    def compute_action(self, m, s, squash=True):
+        '''
+        RBF Controller. See Deisenroth's Thesis Section
+        IN: mean (m) and variance (s) of the state
+        OUT: mean (M) and variance (S) of the action
+        '''
+        # if it is within the ball...
+        # iK, beta = self.calculate_factorizations()
+        # M, S, V = self.predict_given_factorizations(m, s, 0.0 * iK, beta)
+        # S = S - tf.diag(self.variance - 1e-6)
+        # if squash:
+        #     M, S, V2 = squash_sin(M, S, self.max_action)
+        #     V = V @ V2
+        # return M, S, V
+        raise NotImplementedError
+
+    def randomize(self):
+        self.rbc_controller.randomize()
+        self.linear_controller.randomize()
