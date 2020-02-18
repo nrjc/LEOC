@@ -122,7 +122,7 @@ class RbfController(MGPR):
             m.kern.lengthscales.assign(mean + sigma * np.random.normal(size=m.kern.lengthscales.shape))
 
 
-class CombinedController:
+class CombinedController(gpflow.Parameterized):
     '''
     An RBF Controller implemented as a deterministic GP
     See Deisenroth et al 2015: Gaussian Processes for Data-Efficient Learning in Robotics and Control
@@ -130,6 +130,7 @@ class CombinedController:
     '''
 
     def __init__(self, state_dim, control_dim, num_basis_functions, max_action=None):
+        gpflow.Parameterized.__init__(self)
         self.rbc_controller = RbfController(state_dim, control_dim, num_basis_functions, max_action)
         self.linear_controller = LinearController(state_dim, control_dim, max_action)
         self.a = gpflow.Param(np.random.rand(state_dim, 1))
@@ -150,15 +151,21 @@ class CombinedController:
         IN: mean (m) and variance (s) of the state
         OUT: mean (M) and variance (S) of the action
         '''
+        r = self.compute_ratio(m)
+        M1, S1, V1 = self.linear_controller.compute_action(m, s, False)
+        M2, S2, V2 = self.rbc_controller.compute_action(m, s, False)
         # if it is within the ball...
         # iK, beta = self.calculate_factorizations()
         # M, S, V = self.predict_given_factorizations(m, s, 0.0 * iK, beta)
         # S = S - tf.diag(self.variance - 1e-6)
-        # if squash:
-        #     M, S, V2 = squash_sin(M, S, self.max_action)
-        #     V = V @ V2
-        # return M, S, V
-        raise NotImplementedError
+        M = (1 - r) * M1 + r * M2
+        S = (1 - r) * S1 + r * S2 + (1 - r) * (M1 - M) @ tf.transpose(M1 - M) + r * (M2 - M) @ tf.transpose(M2 - M)
+        Vc = V1 + V2 # TODO: This is not right. This should be E[x* h(x*)^T]
+        V = Vc - m * tf.transpose(M)
+        if squash:
+            M, S, V2 = squash_sin(M, S, self.max_action)
+            V = V @ V2
+        return M, S, V
 
     def randomize(self):
         self.rbc_controller.randomize()
