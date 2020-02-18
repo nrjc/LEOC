@@ -160,8 +160,7 @@ class CombinedController(gpflow.Parameterized):
         # S = S - tf.diag(self.variance - 1e-6)
         M = (1 - r) * M1 + r * M2
         S = (1 - r) * S1 + r * S2 + (1 - r) * (M1 - M) @ tf.transpose(M1 - M) + r * (M2 - M) @ tf.transpose(M2 - M)
-        Vc = V1 + V2 # TODO: This is not right. This should be E[x* h(x*)^T]
-        V = Vc - m * tf.transpose(M)
+        V = (1 - r) * V1 + r * V2
         if squash:
             M, S, V2 = squash_sin(M, S, self.max_action)
             V = V @ V2
