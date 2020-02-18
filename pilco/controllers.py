@@ -3,7 +3,7 @@ import numpy as np
 import gpflow
 
 from .models import MGPR
-from gpflow import settings
+from gpflow import settings, transforms
 import math
 
 float_type = settings.dtypes.float_type
@@ -129,13 +129,15 @@ class CombinedController(gpflow.Parameterized):
     Section 5.3.2.
     '''
 
-    def __init__(self, state_dim, control_dim, num_basis_functions, max_action=None):
+    def __init__(self, state_dim, control_dim, num_basis_functions, controller_location=None, max_action=None):
         gpflow.Parameterized.__init__(self)
+        if controller_location == None:
+            controller_location = np.zeros((state_dim, 1))
         self.rbc_controller = RbfController(state_dim, control_dim, num_basis_functions, max_action)
         self.linear_controller = LinearController(state_dim, control_dim, max_action)
-        self.a = gpflow.Param(np.random.rand(state_dim, 1))
-        self.S = gpflow.Param(np.identity(state_dim) * np.random.rand(state_dim, 1))
-        self.zeta = 0.5
+        self.a = gpflow.Param(controller_location, trainable=False)
+        self.S = gpflow.Param(np.identity(state_dim) * np.random.rand(state_dim, 1), transform=transforms.positive)
+        self.zeta = gpflow.Param(0.5, transform=transforms.positive)
 
     def compute_ratio(self, x):
         '''
@@ -154,10 +156,6 @@ class CombinedController(gpflow.Parameterized):
         r = self.compute_ratio(m)
         M1, S1, V1 = self.linear_controller.compute_action(m, s, False)
         M2, S2, V2 = self.rbc_controller.compute_action(m, s, False)
-        # if it is within the ball...
-        # iK, beta = self.calculate_factorizations()
-        # M, S, V = self.predict_given_factorizations(m, s, 0.0 * iK, beta)
-        # S = S - tf.diag(self.variance - 1e-6)
         M = (1 - r) * M1 + r * M2
         S = (1 - r) * S1 + r * S2 + (1 - r) * (M1 - M) @ tf.transpose(M1 - M) + r * (M2 - M) @ tf.transpose(M2 - M)
         V = (1 - r) * V1 + r * V2
