@@ -36,10 +36,10 @@ def squash_sin(m, s, max_action=None):
 
 
 class LinearController(gpflow.Parameterized):
-    def __init__(self, state_dim, control_dim, max_action=None):
+    def __init__(self, state_dim, control_dim, max_action=None, trainable=True):
         gpflow.Parameterized.__init__(self)
-        self.W = gpflow.Param(np.random.rand(control_dim, state_dim))
-        self.b = gpflow.Param(np.random.rand(1, control_dim))
+        self.W = gpflow.Param(np.random.rand(control_dim, state_dim), trainable=trainable)
+        self.b = gpflow.Param(np.random.rand(1, control_dim), trainable=trainable)
         self.max_action = max_action
 
     @gpflow.params_as_tensors
@@ -136,7 +136,8 @@ class CombinedController(gpflow.Parameterized):
         self.rbc_controller = RbfController(state_dim, control_dim, num_basis_functions, max_action)
         self.linear_controller = LinearController(state_dim, control_dim, max_action)
         self.a = gpflow.Param(controller_location, trainable=False)
-        self.S = gpflow.Param(np.identity(state_dim) * np.random.rand(state_dim, 1), transform=transforms.positive)
+        self.S = gpflow.Param(np.identity(state_dim) * np.random.rand(state_dim, 1),
+                              transform=transforms.DiagMatrix(state_dim)(transforms.positive))
         self.zeta = gpflow.Param(0.5, transform=transforms.positive)
 
     def compute_ratio(self, x):
