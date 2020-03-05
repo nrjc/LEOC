@@ -67,7 +67,7 @@ with tf.Session() as sess:
 
     R = ExponentialReward(state_dim=state_dim, t=target, W=weights)
 
-    pilco = PILCO(X, Y, controller=controller, horizon=T, reward=R, m_init=m_init, S_init=S_init)
+    pilco = PILCO(X, Y, horizon=T, reward=R, m_init=m_init, S_init=S_init)
 
     # for numerical stability
     for model in pilco.mgpr.models:

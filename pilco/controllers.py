@@ -132,20 +132,20 @@ class CombinedController(gpflow.Parameterized):
     def __init__(self, state_dim, control_dim, num_basis_functions, controller_location=None, max_action=None):
         gpflow.Parameterized.__init__(self)
         if controller_location == None:
-            controller_location = np.zeros((state_dim, 1))
+            controller_location = np.zeros((1, state_dim))
         self.rbc_controller = RbfController(state_dim, control_dim, num_basis_functions, max_action)
         self.linear_controller = LinearController(state_dim, control_dim, max_action)
         self.a = gpflow.Param(controller_location, trainable=False)
-        self.S = gpflow.Param(np.identity(state_dim) * np.random.rand(state_dim, 1),
-                              transform=transforms.DiagMatrix(state_dim)(transforms.positive))
+        self.S = gpflow.Param(np.random.randn(1, 1), transform=transforms.DiagMatrix(state_dim)(transforms.positive))
         self.zeta = gpflow.Param(0.5, transform=transforms.positive)
+        self.max_action = max_action
 
     def compute_ratio(self, x):
         '''
         Compute the ratio of the linear controller
         '''
-        r = tf.transpose(x - self.a) @ self.S @ (x - self.a)
-        ratio = -1 / math.pi * tf.math.atan2(- r * self.zeta, (1 - tf.math.pow(r, 2)))
+        r = (x - self.a.parameter_tensor) @ self.S.constrained_tensor @ tf.transpose(x - self.a.parameter_tensor)
+        ratio = -1 / math.pi * tf.math.atan2(- r * self.zeta.constrained_tensor, (1 - tf.math.pow(r, 2)))
         return ratio
 
     def compute_action(self, m, s, squash=True):
