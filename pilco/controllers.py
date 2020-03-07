@@ -6,6 +6,8 @@ from .models import MGPR
 from gpflow import settings, transforms
 import math
 
+from .transforms import Squeeze
+
 float_type = settings.dtypes.float_type
 
 
@@ -136,7 +138,8 @@ class CombinedController(gpflow.Parameterized):
         self.rbc_controller = RbfController(state_dim, control_dim, num_basis_functions, max_action)
         self.linear_controller = LinearController(state_dim, control_dim, max_action)
         self.a = gpflow.Param(controller_location, trainable=False)
-        self.S = gpflow.Param(np.random.randn(3,3), transform=transforms.DiagMatrix(state_dim)(transforms.positive))
+        self.S = gpflow.Param(np.random.randn(3, 1) * np.identity(3),
+                              transform=Squeeze()(transforms.DiagMatrix(state_dim))(transforms.positive))
         self.zeta = gpflow.Param(0.5, transform=transforms.positive)
         self.max_action = max_action
 
@@ -145,7 +148,6 @@ class CombinedController(gpflow.Parameterized):
         Compute the ratio of the linear controller
         '''
         r = (x - self.a.parameter_tensor) @ self.S.constrained_tensor @ tf.transpose(x - self.a.parameter_tensor)
-        r = tf.reshape(r, [-1])
         ratio = -1 / math.pi * tf.math.atan2(- r * self.zeta.constrained_tensor, (1 - tf.math.pow(r, 2)))
         return ratio
 
