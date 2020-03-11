@@ -1,12 +1,20 @@
 import tensorflow as tf
+print(tf.__version__)
 import numpy as np
 import gpflow
-
+print(gpflow.__version__)
 from .models import MGPR
 from gpflow import settings, transforms
 import math
 
+from .transforms import Squeeze
+
 float_type = settings.dtypes.float_type
+
+# import oct2py
+# octave = oct2py.Oct2Py()
+# dir_path = os.path.dirname(os.path.realpath("__file__")) + "/tests/Matlab Code"
+# octave.addpath(dir_path)
 
 
 def squash_sin(m, s, max_action=None):
@@ -64,11 +72,47 @@ class LinearController(gpflow.Parameterized):
         self.b.assign(mean + sigma * np.random.normal(size=self.b.shape))
 
 
+# class LinearControllerInvertedPendulum(LinearController):
+#     def __init__(self, max_action=None, trainable=False):
+#         super().__init__()
+
+#         A, B, _, _ = octave.inverted_pendulum(M=0.5, m=0.2, b=0.1, I=0.006, l=0.3)
+#         self.W = A
+#         self.b = B
+#         self.max_action = max_action
+
+
+class LinearControllerIPTest(LinearController):
+    def __init__(self):
+        super().__init__(4, 4, max_action=None, trainable=False)
+
+    def calculate(self, M=0.5, m=0.2, b=0.1, I=0.006, l=0.3):
+        g = 9.8
+        p = I * (M+m) + M * m * l**2
+
+        self.W = gpflow.Param(np.array([[0,              1,              0,              0],
+                                        [0, -(I+m*l^2)*b/p,  (m^2*g*l^2)/p,              0],
+                                        [0,              0,              0,              1],
+                                        [0,     -(m*l*b)/p,  m*g*l*(M+m)/p,              0]]),
+                                        trainable=trainable)
+        
+        self.b = gpflow.Param(np.array([[0],
+                                        [(I+m*l^2)/p],
+                                        [0],
+                                        [m*l/p]]),
+                                        trainable=trainable)
+
+my_test = LinearControllerIPTest()
+my_test.calculate()
+print(my_test.W)
+
+
 class FakeGPR(gpflow.Parameterized):
     def __init__(self, X, Y, kernel):
         gpflow.Parameterized.__init__(self)
         self.X = gpflow.Param(X)
         self.Y = gpflow.Param(Y)
+
         self.kern = kernel
         self.likelihood = gpflow.likelihoods.Gaussian()
 
@@ -136,7 +180,8 @@ class CombinedController(gpflow.Parameterized):
         self.rbc_controller = RbfController(state_dim, control_dim, num_basis_functions, max_action)
         self.linear_controller = LinearController(state_dim, control_dim, max_action)
         self.a = gpflow.Param(controller_location, trainable=False)
-        self.S = gpflow.Param(np.random.randn(3,3), transform=transforms.DiagMatrix(state_dim)(transforms.positive))
+        self.S = gpflow.Param(np.random.randn(3, 1) * np.identity(3),
+                              transform=Squeeze()(transforms.DiagMatrix(state_dim))(transforms.positive))
         self.zeta = gpflow.Param(0.5, transform=transforms.positive)
         self.max_action = max_action
 
@@ -145,7 +190,6 @@ class CombinedController(gpflow.Parameterized):
         Compute the ratio of the linear controller
         '''
         r = (x - self.a.parameter_tensor) @ self.S.constrained_tensor @ tf.transpose(x - self.a.parameter_tensor)
-        r = tf.reshape(r, [-1])
         ratio = -1 / math.pi * tf.math.atan2(- r * self.zeta.constrained_tensor, (1 - tf.math.pow(r, 2)))
         return ratio
 
