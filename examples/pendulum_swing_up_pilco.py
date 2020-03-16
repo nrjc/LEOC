@@ -1,7 +1,7 @@
 import numpy as np
 import gym
 from pilco.models import PILCO
-from pilco.controllers import RbfController, LinearController, CombinedController
+from pilco.controllers import RbfController, LinearController, CombinedController, LinearControllerIPTest, ControllerSwingUp
 from pilco.rewards import ExponentialReward
 import tensorflow as tf
 from tensorflow import logging
@@ -62,7 +62,9 @@ with tf.Session() as sess:
 
     state_dim = Y.shape[1]
     control_dim = X.shape[1] - state_dim
-    controller = CombinedController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf, max_action=max_action)
+    # controller = CombinedController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf, max_action=max_action)
+    A, B = ControllerSwingUp()
+    controller = LinearControllerIPTest(A, B)
 
     R = ExponentialReward(state_dim=state_dim, t=target, W=weights)
 

@@ -1,20 +1,14 @@
 import tensorflow as tf
-print(tf.__version__)
 import numpy as np
 import gpflow
-print(gpflow.__version__)
 from .models import MGPR
 from gpflow import settings, transforms
 import math
+import control
 
 from .transforms import Squeeze
 
 float_type = settings.dtypes.float_type
-
-# import oct2py
-# octave = oct2py.Oct2Py()
-# dir_path = os.path.dirname(os.path.realpath("__file__")) + "/tests/Matlab Code"
-# octave.addpath(dir_path)
 
 
 def squash_sin(m, s, max_action=None):
@@ -72,39 +66,74 @@ class LinearController(gpflow.Parameterized):
         self.b.assign(mean + sigma * np.random.normal(size=self.b.shape))
 
 
-# class LinearControllerInvertedPendulum(LinearController):
-#     def __init__(self, max_action=None, trainable=False):
-#         super().__init__()
+def ControllerInverted(M=0.5, m=0.5, l=0.6, b=0.1):
+    # reference http://ctms.engin.umich.edu/CTMS/index.php?example=InvertedPendulum&section=SystemModeling
+    # M = mass of cart
+    # m = mass of pendulum
+    # l = length of pendulum
+    # b = coefficient of friction of cart
 
-#         A, B, _, _ = octave.inverted_pendulum(M=0.5, m=0.2, b=0.1, I=0.006, l=0.3)
-#         self.W = A
-#         self.b = B
-#         self.max_action = max_action
+    g = 9.82
+    I = 1/12 * m * l**2
+    r = l/2
+    p = I * (M+m) + M * m * r**2
+
+    A = np.array([[0, 1,                          0,                      0],
+                  [0, -(I + m * r**2) * b / p,    (m**2 * g * r**2) / p,  0],
+                  [0, 0,                          0,                      1],
+                  [0, -(m*r*b)/p,                 m*g*r*(M+m)/p,          0]])
+    
+    B = np.array([[0],
+                  [(I+m*r**2)/p],
+                  [0],
+                  [m*r/p]])
+
+    return A, B
+
+def ControllerSwingUp(m=1, l=1, b=0.1):
+    # m = mass of pendulum
+    # l = length of pendulum
+    # b = coefficient of friction of pendulum
+
+    g = 9.82
+    I = 1/12 * m * l**2
+    p = 1/4 * m * l**2 + I
+    
+    # using x to approximate sin(x)
+    A = np.array([[-b/p,    -1/2 * m * l * g],
+                  [1,       0]])
+    
+    B = np.array([[1/p],
+                  [0]])
+
+    return A, B
 
 
 class LinearControllerIPTest(LinearController):
-    def __init__(self):
-        super().__init__(4, 4, max_action=None, trainable=False)
+    def __init__(self, A, B, max_action=None, trainable=False):
+        super(LinearControllerIPTest, self).__init__(1, 1, max_action=max_action, trainable=trainable)
+        self.A = A
+        self.B = B
+        # control_dim = 1
+        # state_dim = len(self.A)
 
-    def calculate(self, M=0.5, m=0.2, b=0.1, I=0.006, l=0.3):
-        g = 9.8
-        p = I * (M+m) + M * m * l**2
-
-        self.W = gpflow.Param(np.array([[0,              1,              0,              0],
-                                        [0, -(I+m*l^2)*b/p,  (m^2*g*l^2)/p,              0],
-                                        [0,              0,              0,              1],
-                                        [0,     -(m*l*b)/p,  m*g*l*(M+m)/p,              0]]),
-                                        trainable=trainable)
+        assert len(self.A) == 2 or len(self.A) == 4, "state_dim wrong?"
+        if len(self.A) == 2:
+            self.Q = np.array([[1, 0],
+                               [0, 0]])
+        elif len(self.A) == 4:
+            self.Q = np.array([[1, 0, 0, 0],
+                               [0, 0, 0, 0],
+                               [0, 0, 1, 0],
+                               [0, 0, 0, 0]])
         
-        self.b = gpflow.Param(np.array([[0],
-                                        [(I+m*l^2)/p],
-                                        [0],
-                                        [m*l/p]]),
-                                        trainable=trainable)
+        self.R = 1
 
-my_test = LinearControllerIPTest()
-my_test.calculate()
-print(my_test.W)
+        self.K, _, _ = control.lqr(self.A, self.B, self.Q, self.R)
+        print(type(self.K))
+
+        self.W = gpflow.Param(np.array(self.K), trainable=trainable)
+        print(self.W)
 
 
 class FakeGPR(gpflow.Parameterized):
