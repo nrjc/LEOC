@@ -1,7 +1,8 @@
 import numpy as np
 import gym
 from pilco.models import PILCO
-from pilco.controllers import RbfController, LinearController, CombinedController, LinearControllerIPTest, ControllerSwingUp
+from pilco.controllers import RbfController, LinearController, CombinedController, ControllerSwingUp
+from pilco.controller_utils import LinearControllerIPTest
 from pilco.rewards import ExponentialReward
 import tensorflow as tf
 from tensorflow import logging

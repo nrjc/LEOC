@@ -18,10 +18,11 @@ class SMGPR(MGPR):
         for i in range(self.num_outputs):
             kern = gpflow.kernels.RBF(input_dim=X.shape[1], ARD=True)
             Z = np.random.rand(self.num_induced_points, self.num_dims)
-            #TODO: Maybe fix noise for better conditioning
-            self.models.append(gpflow.models.SGPR(X, Y[:, i:i+1], kern, Z=Z))
-            self.models[i].clear(); self.models[i].compile()
-    
+            # TODO: Maybe fix noise for better conditioning
+            self.models.append(gpflow.models.SGPR(X, Y[:, i:i + 1], kern, Z=Z))
+            self.models[i].clear();
+            self.models[i].compile()
+
     def calculate_factorizations(self):
         batched_eye = tf.eye(self.num_induced_points, batch_shape=[self.num_outputs], dtype=float_type)
         # TODO: Change 1e-6 to the respective constant of GPflow
@@ -30,17 +31,17 @@ class SMGPR(MGPR):
         L = tf.cholesky(Kmm)
         V = tf.matrix_triangular_solve(L, Kmn)
         G = self.variance[:, None] - tf.reduce_sum(tf.square(V), axis=[1])
-        G = tf.sqrt(1.0 + G/self.noise[:, None])
-        V = V/G[:, None]
+        G = tf.sqrt(1.0 + G / self.noise[:, None])
+        V = V / G[:, None]
         Am = tf.cholesky(tf.matmul(V, V, transpose_b=True) + \
-                self.noise[:, None, None] * batched_eye)
+                         self.noise[:, None, None] * batched_eye)
         At = tf.matmul(L, Am)
         iAt = tf.matrix_triangular_solve(At, batched_eye)
         Y_ = tf.transpose(self.Y)[:, :, None]
         beta = tf.matrix_triangular_solve(L,
-            tf.cholesky_solve(Am, (V/G[:, None]) @ Y_),
-            adjoint=True
-        )[:, :, 0]
+                                          tf.cholesky_solve(Am, (V / G[:, None]) @ Y_),
+                                          adjoint=True
+                                          )[:, :, 0]
         iB = tf.matmul(iAt, iAt, transpose_a=True) * self.noise[:, None, None]
         iK = tf.cholesky_solve(L, batched_eye) - iB
 
