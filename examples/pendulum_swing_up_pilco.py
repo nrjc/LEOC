@@ -7,7 +7,9 @@ from pilco.rewards import ExponentialReward
 import tensorflow as tf
 from tensorflow import logging
 from utils import rollout, policy
+
 np.random.seed(0)
+
 
 # NEEDS a different initialisation than the one in gym (change the reset() method),
 # to (m_init, S_init), modifying the gym env
@@ -28,7 +30,7 @@ class myPendulum():
     def reset(self):
         high = np.array([np.pi, 1])
         self.env.state = np.random.uniform(low=-high, high=high)
-        self.env.state = np.random.uniform(low=0, high=0.01*high) # only difference
+        self.env.state = np.random.uniform(low=0, high=0.01 * high)  # only difference
         self.env.state[0] += -np.pi
         self.env.last_u = None
         return self.env._get_obs()
@@ -36,14 +38,34 @@ class myPendulum():
     def render(self):
         self.env.render()
 
+    def ControllerSwingUp(self):
+        # m = mass of pendulum
+        # l = length of pendulum
+        # b = coefficient of friction of pendulum
+        b = 0
+        g = self.env.g
+        m = self.env.m
+        l = self.env.l
+        I = 1 / 12 * m * l ** 2
+        p = 1 / 4 * m * l ** 2 + I
 
-SUBS=3
+        # using x to approximate sin(x)
+        A = np.array([[-b / p, -1 / 2 * m * l * g],
+                      [1, 0]])
+
+        B = np.array([[1 / p],
+                      [0]])
+
+        return A, B
+
+
+SUBS = 3
 bf = 30
-maxiter=50
-max_action=2.0
+maxiter = 50
+max_action = 2.0
 target = np.array([1.0, 0.0, 0.0])
 weights = np.diag([2.0, 2.0, 0.3])
-m_init = np.reshape([-1.0, 0, 0.0], (1,3))
+m_init = np.reshape([-1.0, 0, 0.0], (1, 3))
 S_init = np.diag([0.01, 0.05, 0.01])
 T = 40
 T_sim = T
@@ -55,8 +77,8 @@ with tf.Session() as sess:
     env = myPendulum()
 
     # Initial random rollouts to generate a dataset
-    X,Y = rollout(env, None, timesteps=T, random=True, SUBS=SUBS)
-    for i in range(1,J):
+    X, Y = rollout(env, None, timesteps=T, random=True, SUBS=SUBS)
+    for i in range(1, J):
         X_, Y_ = rollout(env, None, timesteps=T, random=True, SUBS=SUBS, verbose=True)
         X = np.vstack((X, X_))
         Y = np.vstack((Y, Y_))
@@ -64,7 +86,7 @@ with tf.Session() as sess:
     state_dim = Y.shape[1]
     control_dim = X.shape[1] - state_dim
     # controller = CombinedController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf, max_action=max_action)
-    A, B = ControllerSwingUp()
+    A, B = env.ControllerSwingUp()
     controller = LinearControllerIPTest(A, B)
 
     R = ExponentialReward(state_dim=state_dim, t=target, W=weights)
@@ -91,5 +113,6 @@ with tf.Session() as sess:
         # print('On this episode reward was ', cur_rew)
 
         # Update dataset
-        X = np.vstack((X, X_new)); Y = np.vstack((Y, Y_new))
+        X = np.vstack((X, X_new));
+        Y = np.vstack((Y, Y_new))
         pilco.mgpr.set_XY(X, Y)

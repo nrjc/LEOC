@@ -10,8 +10,57 @@ np.random.seed(0)
 # TODO: Try with Combined Controller
 from utils import rollout, policy
 
+
+class myPendulum():
+    def __init__(self):
+        self.env = gym.make('InvertedPendulum-v2').env
+        self.action_space = self.env.action_space
+        self.observation_space = self.env.observation_space
+
+    def step(self, action):
+        return self.env.step(action)
+
+    def reset(self):
+        high = np.array([np.pi, 1])
+        self.env.state = np.random.uniform(low=-high, high=high)
+        self.env.state = np.random.uniform(low=0, high=0.01 * high)  # only difference
+        self.env.state[0] += -np.pi
+        self.env.last_u = None
+        return self.env._get_obs()
+
+    def ControllerInverted(self):
+        # reference http://ctms.engin.umich.edu/CTMS/index.php?example=InvertedPendulum&section=SystemModeling
+        # M = mass of cart
+        # m = mass of pendulum
+        # l = length of pendulum
+        # b = coefficient of friction of cart
+        b = 0
+        M = self.env.masscart
+        m = self.env.masspole
+        l = self.env.length * 2
+        g = self.env.gravity
+        I = 1 / 12 * m * l ** 2
+        r = l / 2
+        p = I * (M + m) + M * m * r ** 2
+
+        A = np.array([[0, 1, 0, 0],
+                      [0, -(I + m * r ** 2) * b / p, (m ** 2 * g * r ** 2) / p, 0],
+                      [0, 0, 0, 1],
+                      [0, -(m * r * b) / p, m * g * r * (M + m) / p, 0]])
+
+        B = np.array([[0],
+                      [(I + m * r ** 2) / p],
+                      [0],
+                      [m * r / p]])
+
+        return A, B
+
+    def render(self):
+        self.env.render()
+
+
 with tf.Session(graph=tf.Graph()) as sess:
-    env = gym.make('InvertedPendulum-v2')
+    env = myPendulum()
     # Initial random rollouts to generate a dataset
     X, Y = rollout(env=env, pilco=None, random=True, timesteps=40)
     for i in range(1, 3):

@@ -65,49 +65,6 @@ class LinearController(gpflow.Parameterized):
         self.b.assign(mean + sigma * np.random.normal(size=self.b.shape))
 
 
-def ControllerInverted(M=0.5, m=0.5, l=0.6, b=0.1):
-    # reference http://ctms.engin.umich.edu/CTMS/index.php?example=InvertedPendulum&section=SystemModeling
-    # M = mass of cart
-    # m = mass of pendulum
-    # l = length of pendulum
-    # b = coefficient of friction of cart
-
-    g = 9.82
-    I = 1/12 * m * l**2
-    r = l/2
-    p = I * (M+m) + M * m * r**2
-
-    A = np.array([[0, 1,                          0,                      0],
-                  [0, -(I + m * r**2) * b / p,    (m**2 * g * r**2) / p,  0],
-                  [0, 0,                          0,                      1],
-                  [0, -(m*r*b)/p,                 m*g*r*(M+m)/p,          0]])
-    
-    B = np.array([[0],
-                  [(I+m*r**2)/p],
-                  [0],
-                  [m*r/p]])
-
-    return A, B
-
-def ControllerSwingUp(m=1, l=1, b=0.1):
-    # m = mass of pendulum
-    # l = length of pendulum
-    # b = coefficient of friction of pendulum
-
-    g = 9.82
-    I = 1/12 * m * l**2
-    p = 1/4 * m * l**2 + I
-    
-    # using x to approximate sin(x)
-    A = np.array([[-b/p,    -1/2 * m * l * g],
-                  [1,       0]])
-    
-    B = np.array([[1/p],
-                  [0]])
-
-    return A, B
-
-
 class FakeGPR(gpflow.Parameterized):
     def __init__(self, X, Y, kernel):
         gpflow.Parameterized.__init__(self)
