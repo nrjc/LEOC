@@ -56,7 +56,7 @@ class myPendulum():
         B = np.array([[0],
                       [1 / p]])
 
-        C = np.array([1, 0])
+        C = np.array([[1, 0]])
 
         return A, B, C
 
@@ -87,9 +87,10 @@ with tf.Session() as sess:
 
     state_dim = Y.shape[1]
     control_dim = X.shape[1] - state_dim
-    # controller = CombinedController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf, max_action=max_action)
     A, B, C = env.control()
     controller = LinearControllerTest(A, B, C)
+    controller = CombinedController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf, max_action=max_action)
+
 
     R = ExponentialReward(state_dim=state_dim, t=target, W=weights)
 

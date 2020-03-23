@@ -18,9 +18,7 @@ class LinearControllerTest(LinearController):
         self.Q = self.C.T * self.C
         self.R = 1
 
-
         K, _, _ = control.lqr(self.A, self.B, self.Q, self.R)
-        print(K)
         self.K = self.get_k_prime(K)
         print(self.K)
 
@@ -28,6 +26,7 @@ class LinearControllerTest(LinearController):
         print(self.W)
 
     def get_k_prime(self, K, swing_up=1):
+        K = K.A
         if swing_up:
-            k_prime = [0, K[0], K[1]]
+            k_prime = [[0, K[0][0], K[0][1]]]
         return k_prime
