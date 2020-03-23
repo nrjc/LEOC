@@ -143,6 +143,14 @@ class CombinedController(gpflow.Parameterized):
         self.zeta = gpflow.Param(0.5, transform=transforms.positive)
         self.max_action = max_action
 
+    @classmethod
+    def create_combined_controller_with_W(cls, state_dim, control_dim, num_basis_functions, W, controller_location=None,
+                                          max_action=None):
+        cl_obj = cls(state_dim, control_dim, num_basis_functions, controller_location=controller_location,
+                     max_action=max_action)
+        cl_obj.linear_controller.W = gpflow.Param(W, trainable=False)
+        return cl_obj
+
     def compute_ratio(self, x):
         '''
         Compute the ratio of the linear controller

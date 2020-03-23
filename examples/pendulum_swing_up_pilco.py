@@ -2,7 +2,7 @@ import numpy as np
 import gym
 from pilco.models import PILCO
 from pilco.controllers import RbfController, LinearController, CombinedController
-from pilco.controller_utils import LinearControllerTest
+from pilco.controller_utils import LQR
 from pilco.rewards import ExponentialReward
 import tensorflow as tf
 from tensorflow import logging
@@ -88,9 +88,10 @@ with tf.Session() as sess:
     state_dim = Y.shape[1]
     control_dim = X.shape[1] - state_dim
     A, B, C = env.control()
-    controller = LinearControllerTest(A, B, C)
-    controller = CombinedController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf, max_action=max_action)
-
+    W_matrix = LQR().get_W_matrix(A, B, C)
+    controller = CombinedController.create_combined_controller_with_W(state_dim=state_dim, control_dim=control_dim,
+                                                                      num_basis_functions=bf, W=W_matrix,
+                                                                      max_action=max_action)
 
     R = ExponentialReward(state_dim=state_dim, t=target, W=weights)
 
