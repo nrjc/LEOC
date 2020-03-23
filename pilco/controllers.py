@@ -37,9 +37,12 @@ def squash_sin(m, s, max_action=None):
 
 
 class LinearController(gpflow.Parameterized):
-    def __init__(self, state_dim, control_dim, max_action=None, trainable=True):
+    def __init__(self, state_dim, control_dim, max_action=None, trainable=True, **kwargs):
         gpflow.Parameterized.__init__(self)
-        self.W = gpflow.Param(np.random.rand(control_dim, state_dim), trainable=trainable)
+        if 'W' in kwargs:
+            self.W = gpflow.Param(kwargs['W'], trainable=trainable)
+        else:
+            self.W = gpflow.Param(np.random.rand(control_dim, state_dim), trainable=trainable)
         self.b = gpflow.Param(np.random.rand(1, control_dim), trainable=trainable)
         self.max_action = max_action
 
@@ -131,12 +134,12 @@ class CombinedController(gpflow.Parameterized):
     Section 5.3.2.
     '''
 
-    def __init__(self, state_dim, control_dim, num_basis_functions, controller_location=None, max_action=None):
+    def __init__(self, state_dim, control_dim, num_basis_functions, controller_location=None, max_action=None, W=None):
         gpflow.Parameterized.__init__(self)
         if controller_location == None:
             controller_location = np.zeros((1, state_dim))
         self.rbc_controller = RbfController(state_dim, control_dim, num_basis_functions, max_action)
-        self.linear_controller = LinearController(state_dim, control_dim, max_action)
+        self.linear_controller = LinearController(state_dim, control_dim, max_action, W=W)
         self.a = gpflow.Param(controller_location, trainable=False)
         self.S = gpflow.Param(np.random.randn(3, 1) * np.identity(3),
                               transform=Squeeze()(transforms.DiagMatrix(state_dim))(transforms.positive))
@@ -147,8 +150,7 @@ class CombinedController(gpflow.Parameterized):
     def create_combined_controller_with_W(cls, state_dim, control_dim, num_basis_functions, W, controller_location=None,
                                           max_action=None):
         cl_obj = cls(state_dim, control_dim, num_basis_functions, controller_location=controller_location,
-                     max_action=max_action)
-        cl_obj.linear_controller.W = gpflow.Param(W, trainable=False)
+                     max_action=max_action, W=W)
         return cl_obj
 
     def compute_ratio(self, x):
