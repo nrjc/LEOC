@@ -1,8 +1,8 @@
 import numpy as np
 import gym
 from pilco.models import PILCO
-from pilco.controllers import RbfController, LinearController, CombinedController, ControllerSwingUp
-from pilco.controller_utils import LinearControllerIPTest
+from pilco.controllers import RbfController, LinearController, CombinedController
+from pilco.controller_utils import LinearControllerTest
 from pilco.rewards import ExponentialReward
 import tensorflow as tf
 from tensorflow import logging
@@ -38,10 +38,10 @@ class myPendulum():
     def render(self):
         self.env.render()
 
-    def ControllerSwingUp(self):
-        # m = mass of pendulum
-        # l = length of pendulum
-        # b = coefficient of friction of pendulum
+    def control(self):
+        # m := mass of pendulum
+        # l := length of pendulum
+        # b := coefficient of friction of pendulum
         b = 0
         g = self.env.g
         m = self.env.m
@@ -50,13 +50,15 @@ class myPendulum():
         p = 1 / 4 * m * l ** 2 + I
 
         # using x to approximate sin(x)
-        A = np.array([[-b / p, -1 / 2 * m * l * g],
-                      [1, 0]])
+        A = np.array([[0, 1],
+                      [-1 / 2 * m * l * g / p, -b / p]])
 
-        B = np.array([[1 / p],
-                      [0]])
+        B = np.array([[0],
+                      [1 / p]])
 
-        return A, B
+        C = np.array([1, 0])
+
+        return A, B, C
 
 
 SUBS = 3
@@ -86,8 +88,8 @@ with tf.Session() as sess:
     state_dim = Y.shape[1]
     control_dim = X.shape[1] - state_dim
     # controller = CombinedController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf, max_action=max_action)
-    A, B = env.ControllerSwingUp()
-    controller = LinearControllerIPTest(A, B)
+    A, B, C = env.control()
+    controller = LinearControllerTest(A, B, C)
 
     R = ExponentialReward(state_dim=state_dim, t=target, W=weights)
 
