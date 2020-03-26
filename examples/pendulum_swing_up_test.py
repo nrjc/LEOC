@@ -33,7 +33,7 @@ class myPendulum():
         # self.env.state = np.random.uniform(low=-high, high=high)
         # self.env.state = np.random.uniform(low=0, high=0.01 * high)  # only difference
         # self.env.state[0] += -np.pi
-        self.env.state = np.array([random.normalvariate(0, 0.3), 0])
+        self.env.state = np.array([random.normalvariate(0, 0.2), 0])
         self.env.last_u = None
         return self.env._get_obs()
 
@@ -95,6 +95,6 @@ with tf.Session() as sess:
         action = controller.compute_action(tf.reshape(tf.convert_to_tensor(states), (1, -1)),
                                            tf.zeros([state_dim, state_dim], dtype=tf.dtypes.float64),
                                            squash=False)[0]
-        action = action.eval()[0, :]
+        action = action.eval()[0, :] + random.normalvariate(0, 0.1)
         states, _, _, _ = env.step(action)
         print(f'Step: {i}')
