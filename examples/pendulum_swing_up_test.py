@@ -8,6 +8,7 @@ import tensorflow as tf
 from tensorflow import logging
 from utils import rollout, policy
 import random
+
 np.random.seed(0)
 
 
@@ -32,7 +33,7 @@ class myPendulum():
         # self.env.state = np.random.uniform(low=-high, high=high)
         # self.env.state = np.random.uniform(low=0, high=0.01 * high)  # only difference
         # self.env.state[0] += -np.pi
-        self.env.state = np.array([random.normalvariate(0, 0.1), 0])
+        self.env.state = np.array([random.normalvariate(0, 0.3), 0])
         self.env.last_u = None
         return self.env._get_obs()
 
@@ -52,7 +53,7 @@ class myPendulum():
 
         # using x to approximate sin(x)
         A = np.array([[0, 1],
-                      [-1 / 2 * m * l * g / p, -b / p]])
+                      [1 / 2 * m * l * g / p, -b / p]])
 
         B = np.array([[0],
                       [1 / p]])
@@ -84,7 +85,8 @@ with tf.Session() as sess:
     state_dim = env.observation_space.shape[0]
     control_dim = env.action_space.shape[0]
     # controller = CombinedController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf, W=W_matrix, max_action=max_action)
-    controller = LinearController(state_dim=state_dim, control_dim=control_dim, W=-W_matrix, max_action=max_action, trainable=False)
+    controller = LinearController(state_dim=state_dim, control_dim=control_dim, W=-W_matrix, max_action=max_action,
+                                  trainable=False)
     controller.b = np.zeros([1, control_dim])
 
     states = env.reset()
@@ -93,6 +95,6 @@ with tf.Session() as sess:
         action = controller.compute_action(tf.reshape(tf.convert_to_tensor(states), (1, -1)),
                                            tf.zeros([state_dim, state_dim], dtype=tf.dtypes.float64),
                                            squash=False)[0]
-        action = action.eval()[0,:]
+        action = action.eval()[0, :]
         states, _, _, _ = env.step(action)
         print(f'Step: {i}')
