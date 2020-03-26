@@ -28,10 +28,11 @@ class myPendulum():
         return self.env.step(action)
 
     def reset(self):
-        high = np.array([np.pi, 1])
-        self.env.state = np.random.uniform(low=-high, high=high)
-        self.env.state = np.random.uniform(low=0, high=0.01 * high)  # only difference
-        self.env.state[0] += -np.pi
+        # high = np.array([np.pi, 1])
+        # self.env.state = np.random.uniform(low=-high, high=high)
+        # self.env.state = np.random.uniform(low=0, high=0.01 * high)  # only difference
+        # self.env.state[0] += -np.pi
+        self.env.state = np.array([0, 0])
         self.env.last_u = None
         return self.env._get_obs()
 
@@ -71,52 +72,27 @@ m_init = np.reshape([-1.0, 0, 0.0], (1, 3))
 S_init = np.diag([0.01, 0.05, 0.01])
 T = 40
 T_sim = T
-J = 4
-N = 8
+J = 100
+N = 1
 restarts = 2
 
 with tf.Session() as sess:
     env = myPendulum()
 
-    # Initial random rollouts to generate a dataset
-    X, Y = rollout(env, None, timesteps=T, random=True, SUBS=SUBS)
-    for i in range(1, J):
-        X_, Y_ = rollout(env, None, timesteps=T, random=True, SUBS=SUBS, verbose=True)
-        X = np.vstack((X, X_))
-        Y = np.vstack((Y, Y_))
-
-    state_dim = Y.shape[1]
-    control_dim = X.shape[1] - state_dim
     A, B, C = env.control()
     W_matrix = LQR().get_W_matrix(A, B, C)
-    controller = CombinedController.combined_controller_with_optimized_linear(state_dim=state_dim, control_dim=control_dim,
-                                                                      num_basis_functions=bf, W=W_matrix,
-                                                                      max_action=max_action)
+    state_dim = env.observation_space.shape[0]
+    control_dim = env.action_space.shape[0]
+    # controller = CombinedController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf, W=W_matrix, max_action=max_action)
+    controller = LinearController(state_dim=state_dim, control_dim=control_dim, W=W_matrix, max_action=max_action, trainable=False)
+    controller.b = np.zeros([1, control_dim])
 
-    R = ExponentialReward(state_dim=state_dim, t=target, W=weights)
-
-    pilco = PILCO(X, Y, controller=controller, horizon=T, reward=R, m_init=m_init, S_init=S_init)
-
-    # for numerical stability
-    for model in pilco.mgpr.models:
-        model.likelihood.variance = 0.001
-        model.likelihood.variance.trainable = False
-
-    for rollouts in range(N):
-        print("**** ITERATION no", rollouts, " ****")
-        pilco.optimize_models(maxiter=maxiter, restarts=2)
-        pilco.optimize_policy(maxiter=maxiter, restarts=2)
-
-        X_new, Y_new = rollout(env, pilco, timesteps=T_sim, verbose=True, SUBS=SUBS)
-
-        # Since we had decide on the various parameters of the reward function
-        # we might want to verify that it behaves as expected by inspection
-        # cur_rew = 0
-        # for t in range(0,len(X_new)):
-        #     cur_rew += reward_wrapper(R, X_new[t, 0:state_dim, None].transpose(), 0.0001 * np.eye(state_dim))[0]
-        # print('On this episode reward was ', cur_rew)
-
-        # Update dataset
-        X = np.vstack((X, X_new));
-        Y = np.vstack((Y, Y_new))
-        pilco.mgpr.set_XY(X, Y)
+    states = env.reset()
+    for i in range(J):
+        env.render()
+        action = controller.compute_action(tf.ones([control_dim, state_dim], dtype=tf.dtypes.float64),
+                                           tf.zeros([state_dim, state_dim], dtype=tf.dtypes.float64),
+                                           squash=False)[0]
+        action = action.eval()[0,:]
+        states, _, _, _ = env.step(action)
+        print('iteration finish')
