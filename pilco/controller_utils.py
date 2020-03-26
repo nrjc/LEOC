@@ -16,5 +16,5 @@ class LQR:
     def get_k_prime(self, K, swing_up=1):
         K = K.A
         if swing_up:
-            k_prime = [[0, K[0][0], K[0][1]]]
-        return k_prime
+            K_prime = [[0, K[0][0], K[0][1]]]
+        return K_prime

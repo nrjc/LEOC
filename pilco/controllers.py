@@ -37,10 +37,10 @@ def squash_sin(m, s, max_action=None):
 
 
 class LinearController(gpflow.Parameterized):
-    def __init__(self, state_dim, control_dim, max_action=None, trainable=True, **kwargs):
+    def __init__(self, state_dim, control_dim, max_action=None, trainable=True, W=None):
         gpflow.Parameterized.__init__(self)
-        if 'W' in kwargs:
-            self.W = gpflow.Param(kwargs['W'], trainable=trainable)
+        if W is not None:
+            self.W = gpflow.Param(W, trainable=trainable)
         else:
             self.W = gpflow.Param(np.random.rand(control_dim, state_dim), trainable=trainable)
         self.b = gpflow.Param(np.random.rand(1, control_dim), trainable=trainable)
@@ -60,6 +60,12 @@ class LinearController(gpflow.Parameterized):
             M, S, V2 = squash_sin(M, S, self.max_action)
             V = V @ V2
         return M, S, V
+
+    @gpflow.params_as_tensors
+    def get_W(self):
+        W = tf.transpose(self.W)
+        return W
+
 
     def randomize(self):
         mean = 0;
@@ -145,13 +151,6 @@ class CombinedController(gpflow.Parameterized):
                               transform=Squeeze()(transforms.DiagMatrix(state_dim))(transforms.positive))
         self.zeta = gpflow.Param(0.5, transform=transforms.positive)
         self.max_action = max_action
-
-    @classmethod
-    def create_combined_controller_with_W(cls, state_dim, control_dim, num_basis_functions, W, controller_location=None,
-                                          max_action=None):
-        cl_obj = cls(state_dim, control_dim, num_basis_functions, controller_location=controller_location,
-                     max_action=max_action, W=W)
-        return cl_obj
 
     def compute_ratio(self, x):
         '''

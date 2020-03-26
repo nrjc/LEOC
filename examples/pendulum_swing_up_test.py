@@ -89,7 +89,9 @@ with tf.Session() as sess:
     control_dim = X.shape[1] - state_dim
     A, B, C = env.control()
     W_matrix = LQR().get_W_matrix(A, B, C)
-    controller = CombinedController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf, W=W_matrix, max_action=max_action)
+    controller = CombinedController.combined_controller_with_optimized_linear(state_dim=state_dim, control_dim=control_dim,
+                                                                      num_basis_functions=bf, W=W_matrix,
+                                                                      max_action=max_action)
 
     R = ExponentialReward(state_dim=state_dim, t=target, W=weights)
 
