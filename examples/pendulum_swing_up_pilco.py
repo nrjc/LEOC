@@ -46,12 +46,12 @@ class myPendulum():
         g = self.env.g
         m = self.env.m
         l = self.env.l
-        I = 1 / 12 * m * l ** 2
-        p = 1 / 4 * m * l ** 2 + I
+        I = 1 / 12 * m * (l ** 2)
+        p = 1 / 4 * m * (l ** 2) + I
 
         # using x to approximate sin(x)
         A = np.array([[0, 1],
-                      [-1 / 2 * m * l * g / p, -b / p]])
+                      [1 / 2 * m * l * g / p, -b / p]])
 
         B = np.array([[0],
                       [1 / p]])
@@ -89,7 +89,8 @@ with tf.Session() as sess:
     control_dim = X.shape[1] - state_dim
     A, B, C = env.control()
     W_matrix = LQR().get_W_matrix(A, B, C)
-    controller = CombinedController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf, W=W_matrix, max_action=max_action)
+    controller = CombinedController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf, W=-W_matrix,
+                                    max_action=max_action)
 
     R = ExponentialReward(state_dim=state_dim, t=target, W=weights)
 
@@ -104,7 +105,7 @@ with tf.Session() as sess:
         print("**** ITERATION no", rollouts, " ****")
         pilco.optimize_models(maxiter=maxiter, restarts=2)
         pilco.optimize_policy(maxiter=maxiter, restarts=2)
-
+        print(f'S:{controller.S}, zeta:{controller.zeta}')
         X_new, Y_new = rollout(env, pilco, timesteps=T_sim, verbose=True, SUBS=SUBS)
 
         # Since we had decide on the various parameters of the reward function
