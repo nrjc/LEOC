@@ -77,24 +77,39 @@ J = 100
 N = 1
 restarts = 2
 
-with tf.Session() as sess:
-    env = myPendulum()
 
-    A, B, C = env.control()
-    W_matrix = LQR().get_W_matrix(A, B, C)
-    state_dim = env.observation_space.shape[0]
-    control_dim = env.action_space.shape[0]
-    # controller = CombinedController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf, W=W_matrix, max_action=max_action)
-    controller = LinearController(state_dim=state_dim, control_dim=control_dim, W=-W_matrix, max_action=max_action,
-                                  trainable=False)
-    controller.b = np.zeros([1, control_dim])
+def test_controller(controller_type=LinearController, **kwargs):
+    with tf.Session() as sess:
+        env = myPendulum()
 
-    states = env.reset()
-    for i in range(J):
-        env.render()
-        action = controller.compute_action(tf.reshape(tf.convert_to_tensor(states), (1, -1)),
-                                           tf.zeros([state_dim, state_dim], dtype=tf.dtypes.float64),
-                                           squash=False)[0]
-        action = action.eval()[0, :] + random.normalvariate(0, 0.1)
-        states, _, _, _ = env.step(action)
-        print(f'Step: {i}')
+        A, B, C = env.control()
+        W_matrix = - LQR().get_W_matrix(A, B, C)
+        state_dim = env.observation_space.shape[0]
+        control_dim = env.action_space.shape[0]
+
+        # controller = CombinedController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf, W=W_matrix, max_action=max_action)
+        controller = controller_type(state_dim=state_dim, control_dim=control_dim, W=W_matrix,
+                                     num_basis_functions=kwargs['bf'], max_action=kwargs['max_action'],
+                                     trainable=kwargs['trainable'], controller_location=kwargs['controller_location'])
+
+        # set some hyperparams
+        linear_controller = controller if controller_type == LinearController else controller.linear_controller
+        linear_controller.b = np.zeros([1, control_dim])
+        rbf_controller = None if controller_type == LinearController else controller.rbf_controller
+        if controller_type == CombinedController:
+            controller.zeta =
+
+
+        states = env.reset()
+        for i in range(J):
+            env.render()
+            action = controller.compute_action(tf.reshape(tf.convert_to_tensor(states), (1, -1)),
+                                               tf.zeros([state_dim, state_dim], dtype=tf.dtypes.float64),
+                                               squash=False)[0]
+            action = action.eval()[0, :] + random.normalvariate(0, 0.1)
+            states, _, _, _ = env.step(action)
+            print(f'Step: {i}')
+
+
+if __name__ == '__main__':
+    test_controller()

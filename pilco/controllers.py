@@ -37,7 +37,7 @@ def squash_sin(m, s, max_action=None):
 
 
 class LinearController(gpflow.Parameterized):
-    def __init__(self, state_dim, control_dim, max_action=None, trainable=True, W=None):
+    def __init__(self, state_dim, control_dim, max_action=None, trainable=True, W=None, **kwargs):
         gpflow.Parameterized.__init__(self)
         if W is not None:
             self.W = gpflow.Param(W, trainable=trainable)
@@ -91,7 +91,7 @@ class RbfController(MGPR):
     Section 5.3.2.
     '''
 
-    def __init__(self, state_dim, control_dim, num_basis_functions, max_action=None):
+    def __init__(self, state_dim, control_dim, num_basis_functions, max_action=None, **kwargs):
         MGPR.__init__(self,
                       np.random.randn(num_basis_functions, state_dim),
                       0.1 * np.random.randn(num_basis_functions, control_dim)
@@ -140,7 +140,7 @@ class CombinedController(gpflow.Parameterized):
     Section 5.3.2.
     '''
 
-    def __init__(self, state_dim, control_dim, num_basis_functions, controller_location=None, max_action=None, W=None):
+    def __init__(self, state_dim, control_dim, num_basis_functions, controller_location=None, max_action=None, W=None, **kwargs):
         gpflow.Parameterized.__init__(self)
         if controller_location == None:
             controller_location = np.zeros((1, state_dim))
