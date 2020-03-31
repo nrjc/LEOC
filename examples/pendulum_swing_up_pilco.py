@@ -79,9 +79,9 @@ with tf.Session() as sess:
     env = myPendulum()
 
     # Initial random rollouts to generate a dataset
-    X, Y = rollout(env, None, timesteps=T, random=True, SUBS=SUBS)
+    X, Y = rollout(env, None, timesteps=T, random=True, SUBS=SUBS, render=False)
     for i in range(1, J):
-        X_, Y_ = rollout(env, None, timesteps=T, random=True, SUBS=SUBS, verbose=True)
+        X_, Y_ = rollout(env, None, timesteps=T, random=True, SUBS=SUBS, verbose=False, render=False)
         X = np.vstack((X, X_))
         Y = np.vstack((Y, Y_))
 
@@ -90,7 +90,7 @@ with tf.Session() as sess:
     A, B, C = env.control()
     W_matrix = LQR().get_W_matrix(A, B, C)
     controller = CombinedController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf, W=-W_matrix,
-                                    max_action=max_action)
+                                    max_action=max_action, controller_location=np.array([[0, 1, 0]], dtype=np.float64))
 
     R = ExponentialReward(state_dim=state_dim, t=target, W=weights)
 
@@ -106,7 +106,7 @@ with tf.Session() as sess:
         pilco.optimize_models(maxiter=maxiter, restarts=2)
         pilco.optimize_policy(maxiter=maxiter, restarts=2)
         print(f'S:{controller.S}, zeta:{controller.zeta}')
-        X_new, Y_new = rollout(env, pilco, timesteps=T_sim, verbose=True, SUBS=SUBS)
+        X_new, Y_new = rollout(env, pilco, timesteps=T_sim, verbose=True, SUBS=SUBS, render=True)
 
         # Since we had decide on the various parameters of the reward function
         # we might want to verify that it behaves as expected by inspection

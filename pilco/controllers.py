@@ -142,14 +142,14 @@ class CombinedController(gpflow.Parameterized):
 
     def __init__(self, state_dim, control_dim, num_basis_functions, controller_location=None, max_action=None, W=None, **kwargs):
         gpflow.Parameterized.__init__(self)
-        if controller_location == None:
+        if controller_location is None:
             controller_location = np.zeros((1, state_dim))
         self.rbc_controller = RbfController(state_dim, control_dim, num_basis_functions, max_action)
         self.linear_controller = LinearController(state_dim, control_dim, max_action, W=W)
         self.a = gpflow.Param(controller_location, trainable=False)
         self.S = gpflow.Param(np.random.randn(3, 1) * np.identity(3),
                               transform=Squeeze()(transforms.DiagMatrix(state_dim))(transforms.positive))
-        self.zeta = gpflow.Param(0.5, transform=transforms.positive)
+        self.zeta = gpflow.Param(0., transform=transforms.positive, trainable=False)
         self.max_action = max_action
 
     def compute_ratio(self, x):
@@ -166,7 +166,7 @@ class CombinedController(gpflow.Parameterized):
         IN: mean (m) and variance (s) of the state
         OUT: mean (M) and variance (S) of the action
         '''
-        r = self.compute_ratio(m)
+        r = 1- self.compute_ratio(m)
         M1, S1, V1 = self.linear_controller.compute_action(m, s, False)
         M2, S2, V2 = self.rbc_controller.compute_action(m, s, False)
         M = (1 - r) * M1 + r * M2
