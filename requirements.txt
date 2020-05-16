@@ -1,4 +1,7 @@
-tensorflow==1.14.0
-gpflow==1.5.1
-mujoco-py
-control
+tensorflow==2.1.0
+gpflow==2.0.0
+matplotlib
+pandas
+gym
+oct2py
+pytest
