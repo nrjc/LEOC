@@ -4,6 +4,7 @@ import gym
 from pilco.controller_utils import LQR
 from pilco.models import PILCO
 from pilco.controllers import RbfController, LinearController, CombinedController
+from pilco.plotting_utils import plot_single_rollout_cycle
 from pilco.rewards import ExponentialReward
 import tensorflow as tf
 from utils import rollout, policy
@@ -124,8 +125,16 @@ if __name__ == '__main__':
         for i in range(len(X_new)):
             r_new[:, 0] = R.compute_reward(X_new[i, None, :-1], 0.001 * np.eye(state_dim))[0]
         total_r = sum(r_new)
-        _, _, r = pilco.predict(X_new[0, None, :-1], 0.001 * S_init, T)
+        _, _, r, intermediary_dict = pilco.predict_and_obtain_intermediates(X_new[0, None, :-1], 0.001 * S_init, T)
+        intermediate_mean, intermediate_var = zip(*intermediary_dict)
+        intermediate_var = list(map(lambda x: x.diagonal(), intermediate_var))
+        intermediate_mean = list(map(lambda x: x[0], intermediate_mean))
+        # state_mean = list(map(lambda x: x[:state_dim], intermediate_mean))
+        # state_var = list(map(lambda x: x[:state_dim], intermediate_var))
+        # control_mean = list(map(lambda x: x[state_dim:], intermediate_mean))
+        # control_var = list(map(lambda x: x[state_dim:], intermediate_var))
         print("Total ", total_r, " Predicted: ", r)
+        plot_single_rollout_cycle(intermediate_mean, intermediate_var, [X_new], None, state_dim, control_dim, T, 1)
 
         # Update dataset
         X = np.vstack((X, X_new));

@@ -12,9 +12,10 @@ from .. import rewards
 float_type = gpflow.config.default_float()
 from gpflow import set_trainable
 
+
 class PILCO(gpflow.models.BayesianModel):
     def __init__(self, data, num_induced_points=None, horizon=30, controller=None,
-                reward=None, m_init=None, S_init=None, name=None):
+                 reward=None, m_init=None, S_init=None, name=None):
         super(PILCO, self).__init__(name)
         if num_induced_points is None:
             self.mgpr = MGPR(data)
@@ -56,7 +57,9 @@ class PILCO(gpflow.models.BayesianModel):
         self.mgpr.optimize(restarts=restarts)
         # Print the resulting model parameters
         # ToDo: only do this if verbosity is large enough
-        lengthscales = {}; variances = {}; noises = {};
+        lengthscales = {};
+        variances = {};
+        noises = {};
         i = 0
         for model in self.mgpr.models:
             lengthscales['GP' + str(i)] = model.kernel.lengthscales.numpy()
@@ -90,7 +93,8 @@ class PILCO(gpflow.models.BayesianModel):
             self.optimizer.minimize(self.training_loss, self.trainable_variables, options=dict(maxiter=maxiter))
             # self.optimizer.minimize(self.training_loss, self.trainable_variables)
         end = time.time()
-        print("Controller's optimization: done in %.1f seconds with reward=%.3f." % (end - start, self.compute_reward()))
+        print(
+            "Controller's optimization: done in %.1f seconds with reward=%.3f." % (end - start, self.compute_reward()))
         restarts -= 1
 
         best_parameter_values = [param.numpy() for param in self.trainable_parameters]
@@ -101,12 +105,13 @@ class PILCO(gpflow.models.BayesianModel):
             self.optimizer.minimize(self.training_loss, self.trainable_variables, options=dict(maxiter=maxiter))
             end = time.time()
             reward = self.compute_reward()
-            print("Controller's optimization: done in %.1f seconds with reward=%.3f." % (end - start, self.compute_reward()))
+            print("Controller's optimization: done in %.1f seconds with reward=%.3f." % (
+                end - start, self.compute_reward()))
             if reward > best_reward:
                 best_parameter_values = [param.numpy() for param in self.trainable_parameters]
                 best_reward = reward
 
-        for i,param in enumerate(self.trainable_parameters):
+        for i, param in enumerate(self.trainable_parameters):
             param.assign(best_parameter_values[i])
         end = time.time()
         for param in mgpr_trainable_params:
@@ -127,29 +132,51 @@ class PILCO(gpflow.models.BayesianModel):
             # Termination condition
             lambda j, m_x, s_x, reward: j < n,
             # Body function
-            lambda j, m_x, s_x, reward: (
-                j + 1,
-                *self.propagate(m_x, s_x),
-                tf.add(reward, self.reward.compute_reward(m_x, s_x)[0])
-            ), loop_vars
+            lambda j, m_x, s_x, reward: self.run_condition(m_x, s_x, j, reward),
+            loop_vars
         )
         return m_x, s_x, reward
+
+    def run_condition(self, m_x, s_x, cur_timestep, cur_reward, recording_list=None):
+        if recording_list is not None:
+            recording_list.append((m_x.numpy(), s_x.numpy()))
+        return (
+            cur_timestep + 1, *self.propagate(m_x, s_x), tf.add(cur_reward, self.reward.compute_reward(m_x, s_x)[0]))
+
+    def predict_and_obtain_intermediates(self, m_x, s_x, n):
+        loop_vars = [
+            tf.constant(0, tf.int32),
+            tf.convert_to_tensor(m_x),
+            tf.convert_to_tensor(s_x),
+            tf.constant([[0]], float_type)
+        ]
+        storage_list = []
+
+        _, m_x, s_x, reward = tf.while_loop(
+            # Termination condition
+            lambda j, m_x, s_x, reward: j < n,
+            # Body function
+            lambda j, m_x, s_x, reward: self.run_condition(m_x, s_x, j, reward, storage_list),
+            loop_vars
+        )
+        return m_x, s_x, reward, storage_list
 
     def propagate(self, m_x, s_x):
         m_u, s_u, c_xu = self.controller.compute_action(m_x, s_x)
 
         m = tf.concat([m_x, m_u], axis=1)
-        s1 = tf.concat([s_x, s_x@c_xu], axis=1)
-        s2 = tf.concat([tf.transpose(s_x@c_xu), s_u], axis=1)
+        s1 = tf.concat([s_x, s_x @ c_xu], axis=1)
+        s2 = tf.concat([tf.transpose(s_x @ c_xu), s_u], axis=1)
         s = tf.concat([s1, s2], axis=0)
 
         M_dx, S_dx, C_dx = self.mgpr.predict_on_noisy_inputs(m, s)
         M_x = M_dx + m_x
-        #TODO: cleanup the following line
-        S_x = S_dx + s_x + s1@C_dx + tf.matmul(C_dx, s1, transpose_a=True, transpose_b=True)
+        # TODO: cleanup the following line
+        S_x = S_dx + s_x + s1 @ C_dx + tf.matmul(C_dx, s1, transpose_a=True, transpose_b=True)
 
         # While-loop requires the shapes of the outputs to be fixed
-        M_x.set_shape([1, self.state_dim]); S_x.set_shape([self.state_dim, self.state_dim])
+        M_x.set_shape([1, self.state_dim]);
+        S_x.set_shape([self.state_dim, self.state_dim])
         return M_x, S_x
 
     def compute_reward(self):
