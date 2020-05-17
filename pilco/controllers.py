@@ -1,14 +1,19 @@
+import math
+
 import tensorflow as tf
-from tensorflow_probability import distributions as tfd
+from tensorflow_probability import distributions as tfd, bijectors
 import numpy as np
 import gpflow
 from gpflow import Parameter
 from gpflow import set_trainable
 from gpflow.utilities import positive
+
 f64 = gpflow.utilities.to_default_float
 
 from .models import MGPR
+
 float_type = gpflow.config.default_float()
+
 
 def squash_sin(m, s, max_action=None):
     '''
@@ -20,26 +25,29 @@ def squash_sin(m, s, max_action=None):
     '''
     k = tf.shape(m)[1]
     if max_action is None:
-        max_action = tf.ones((1,k), dtype=float_type)  #squashes in [-1,1] by default
+        max_action = tf.ones((1, k), dtype=float_type)  # squashes in [-1,1] by default
     else:
-        max_action = max_action * tf.ones((1,k), dtype=float_type)
+        max_action = max_action * tf.ones((1, k), dtype=float_type)
 
     M = max_action * tf.exp(-tf.linalg.diag_part(s) / 2) * tf.sin(m)
 
-    lq = -( tf.linalg.diag_part(s)[:, None] + tf.linalg.diag_part(s)[None, :]) / 2
+    lq = -(tf.linalg.diag_part(s)[:, None] + tf.linalg.diag_part(s)[None, :]) / 2
     q = tf.exp(lq)
     S = (tf.exp(lq + s) - q) * tf.cos(tf.transpose(m) - m) \
         - (tf.exp(lq - s) - q) * tf.cos(tf.transpose(m) + m)
     S = max_action * tf.transpose(max_action) * S / 2
 
-    C = max_action * tf.linalg.diag( tf.exp(-tf.linalg.diag_part(s)/2) * tf.cos(m))
-    return M, S, tf.reshape(C,shape=[k,k])
+    C = max_action * tf.linalg.diag(tf.exp(-tf.linalg.diag_part(s) / 2) * tf.cos(m))
+    return M, S, tf.reshape(C, shape=[k, k])
 
 
 class LinearController(gpflow.Module):
-    def __init__(self, state_dim, control_dim, max_action=1.0):
+    def __init__(self, state_dim, control_dim, max_action=1.0, W=None):
         gpflow.Module.__init__(self)
-        self.W = Parameter(np.random.rand(control_dim, state_dim))
+        if W is None:
+            self.W = Parameter(np.random.rand(control_dim, state_dim))
+        else:
+            self.W = Parameter(W)
         self.b = Parameter(np.random.rand(1, control_dim))
         self.max_action = max_action
 
@@ -49,18 +57,19 @@ class LinearController(gpflow.Module):
         IN: mean (m) and variance (s) of the state
         OUT: mean (M) and variance (S) of the action
         '''
-        M = m @ tf.transpose(self.W) + self.b # mean output
-        S = self.W @ s @ tf.transpose(self.W) # output variance
-        V = tf.transpose(self.W) #input output covariance
+        M = m @ tf.transpose(self.W) + self.b  # mean output
+        S = self.W @ s @ tf.transpose(self.W)  # output variance
+        V = tf.transpose(self.W)  # input output covariance
         if squash:
             M, S, V2 = squash_sin(M, S, self.max_action)
             V = V @ V2
         return M, S, V
 
     def randomize(self):
-        mean = 0; sigma = 1
-        self.W.assign(mean + sigma*np.random.normal(size=self.W.shape))
-        self.b.assign(mean + sigma*np.random.normal(size=self.b.shape))
+        mean = 0;
+        sigma = 1
+        self.W.assign(mean + sigma * np.random.normal(size=self.W.shape))
+        self.b.assign(mean + sigma * np.random.normal(size=self.b.shape))
 
 
 class FakeGPR(gpflow.Module):
@@ -77,17 +86,19 @@ class FakeGPR(gpflow.Module):
         self.likelihood.variance.assign(likelihood_variance)
         set_trainable(self.likelihood.variance, False)
 
+
 class RbfController(MGPR):
     '''
     An RBF Controller implemented as a deterministic GP
     See Deisenroth et al 2015: Gaussian Processes for Data-Efficient Learning in Robotics and Control
     Section 5.3.2.
     '''
+
     def __init__(self, state_dim, control_dim, num_basis_functions, max_action=1.0):
         MGPR.__init__(self,
-            [np.random.randn(num_basis_functions, state_dim),
-            0.1*np.random.randn(num_basis_functions, control_dim)]
-        )
+                      [np.random.randn(num_basis_functions, state_dim),
+                       0.1 * np.random.randn(num_basis_functions, control_dim)]
+                      )
         for model in self.models:
             model.kernel.variance.assign(1.0)
             set_trainable(model.kernel.variance, False)
@@ -96,14 +107,14 @@ class RbfController(MGPR):
     def create_models(self, data):
         self.models = []
         for i in range(self.num_outputs):
-            kernel = gpflow.kernels.SquaredExponential(lengthscales=tf.ones([data[0].shape[1],], dtype=float_type))
+            kernel = gpflow.kernels.SquaredExponential(lengthscales=tf.ones([data[0].shape[1], ], dtype=float_type))
             transformed_lengthscales = Parameter(kernel.lengthscales, transform=positive(lower=1e-3))
             kernel.lengthscales = transformed_lengthscales
-            kernel.lengthscales.prior = tfd.Gamma(f64(1.1),f64(1/10.0))
+            kernel.lengthscales.prior = tfd.Gamma(f64(1.1), f64(1 / 10.0))
             if i == 0:
-                self.models.append(FakeGPR((data[0], data[1][:,i:i+1]), kernel))
+                self.models.append(FakeGPR((data[0], data[1][:, i:i + 1]), kernel))
             else:
-                self.models.append(FakeGPR((data[0], data[1][:,i:i+1]), kernel, self.models[-1].X))
+                self.models.append(FakeGPR((data[0], data[1][:, i:i + 1]), kernel, self.models[-1].X))
 
     def compute_action(self, m, s, squash=True):
         '''
@@ -125,5 +136,56 @@ class RbfController(MGPR):
         for m in self.models:
             m.X.assign(np.random.normal(size=m.data[0].shape))
             m.Y.assign(self.max_action / 10 * np.random.normal(size=m.data[1].shape))
-            mean = 1; sigma = 0.1
-            m.kernel.lengthscales.assign(mean + sigma*np.random.normal(size=m.kernel.lengthscales.shape))
+            mean = 1;
+            sigma = 0.1
+            m.kernel.lengthscales.assign(mean + sigma * np.random.normal(size=m.kernel.lengthscales.shape))
+
+
+class CombinedController(gpflow.Module):
+    '''
+    An RBF Controller implemented as a deterministic GP
+    See Deisenroth et al 2015: Gaussian Processes for Data-Efficient Learning in Robotics and Control
+    Section 5.3.2.
+    '''
+
+    def __init__(self, state_dim, control_dim, num_basis_functions, controller_location=None, max_action=None, W=None,
+                 **kwargs):
+        gpflow.Module.__init__(self)
+        if controller_location is None:
+            controller_location = np.zeros((1, state_dim), float_type)
+        self.rbc_controller = RbfController(state_dim, control_dim, num_basis_functions, max_action)
+        self.linear_controller = LinearController(state_dim, control_dim, max_action, W=W)
+        self.a = Parameter(controller_location, trainable=False)
+        self.S = tf.linalg.tensor_diag(Parameter(np.ones((state_dim), float_type),
+                           transform=positive()))
+        self.zeta = Parameter(0.1, transform=positive(), trainable=False)
+        self.max_action = max_action
+
+    def compute_ratio(self, x):
+        '''
+        Compute the ratio of the linear controller
+        '''
+        r = (x - self.a.read_value()) @ self.S @ tf.transpose(x - self.a.read_value())
+        ratio = -1 / math.pi * tf.math.atan2(- r * self.zeta.read_value(), (1 - tf.math.pow(r, 2)))
+        return ratio
+
+    def compute_action(self, m, s, squash=True):
+        '''
+        RBF Controller. See Deisenroth's Thesis Section
+        IN: mean (m) and variance (s) of the state
+        OUT: mean (M) and variance (S) of the action
+        '''
+        r = 1 - self.compute_ratio(m)
+        M1, S1, V1 = self.linear_controller.compute_action(m, s, False)
+        M2, S2, V2 = self.rbc_controller.compute_action(m, s, False)
+        M = (1 - r) * M1 + r * M2
+        S = (1 - r) * S1 + r * S2 + (1 - r) * (M1 - M) @ tf.transpose(M1 - M) + r * (M2 - M) @ tf.transpose(M2 - M)
+        V = (1 - r) * V1 + r * V2
+        if squash:
+            M, S, V2 = squash_sin(M, S, self.max_action)
+            V = V @ V2
+        return M, S, V
+
+    def randomize(self):
+        self.rbc_controller.randomize()
+        self.linear_controller.randomize()
