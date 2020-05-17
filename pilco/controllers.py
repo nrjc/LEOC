@@ -42,13 +42,13 @@ def squash_sin(m, s, max_action=None):
 
 
 class LinearController(gpflow.Module):
-    def __init__(self, state_dim, control_dim, max_action=1.0, W=None):
+    def __init__(self, state_dim, control_dim, max_action=1.0, W=None, b=None):
         gpflow.Module.__init__(self)
         if W is None:
             self.W = Parameter(np.random.rand(control_dim, state_dim))
         else:
             self.W = Parameter(W)
-        self.b = Parameter(np.random.rand(1, control_dim))
+        self.b = Parameter(np.zeros((1, control_dim), dtype=float_type))
         self.max_action = max_action
 
     def compute_action(self, m, s, squash=True):
