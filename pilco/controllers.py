@@ -7,6 +7,7 @@ import gpflow
 from gpflow import Parameter
 from gpflow import set_trainable
 from gpflow.utilities import positive
+from tensorflow_probability.python.bijectors import Chain, ScaleMatvecDiag
 
 f64 = gpflow.utilities.to_default_float
 
@@ -156,8 +157,8 @@ class CombinedController(gpflow.Module):
         self.rbc_controller = RbfController(state_dim, control_dim, num_basis_functions, max_action)
         self.linear_controller = LinearController(state_dim, control_dim, max_action, W=W)
         self.a = Parameter(controller_location, trainable=False)
-        self.S = tf.linalg.tensor_diag(Parameter(np.ones((state_dim), float_type),
-                           transform=positive()))
+        self.S = Parameter(np.ones((state_dim), float_type),
+                           transform=positive())
         self.zeta = Parameter(0.1, transform=positive(), trainable=False)
         self.max_action = max_action
 
@@ -165,7 +166,7 @@ class CombinedController(gpflow.Module):
         '''
         Compute the ratio of the linear controller
         '''
-        r = (x - self.a.read_value()) @ self.S @ tf.transpose(x - self.a.read_value())
+        r = (x - self.a.read_value()) @ tf.linalg.diag(self.S.read_value()) @ tf.transpose(x - self.a.read_value())
         ratio = -1 / math.pi * tf.math.atan2(- r * self.zeta.read_value(), (1 - tf.math.pow(r, 2)))
         return ratio
 
