@@ -89,22 +89,23 @@ if __name__ == '__main__':
 
     env = myPendulum()
     A, B, C = env.control()
+
     W_matrix = LQR().get_W_matrix(A, B, C)
-
-    # Initial random rollouts to generate a dataset
-    X, Y, _, _ = rollout(env, None, timesteps=T, random=True, SUBS=SUBS, render=True)
-    for i in range(1, J):
-        X_, Y_, _, _ = rollout(env, None, timesteps=T, random=True, SUBS=SUBS, verbose=True, render=True)
-        X = np.vstack((X, X_))
-        Y = np.vstack((Y, Y_))
-
-    state_dim = Y.shape[1]
-    control_dim = X.shape[1] - state_dim
-
+    state_dim = env.observation_space.shape[0]
+    control_dim = env.action_space.shape[0]
     controller = CombinedController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf,
                                     controller_location=np.array([[0, 1, 0]], dtype=np.float64), max_action=max_action,
                                     W=-W_matrix)
     R = ExponentialReward(state_dim=state_dim, t=target, W=weights)
+
+    pilco = PILCO((np.zeros((1,1)), np.zeros((1,1))), controller=controller, horizon=T, reward=R, m_init=m_init, S_init=S_init)
+
+    # Initial random rollouts to generate a dataset
+    X, Y, _, _ = rollout(env, pilco, timesteps=T, random=True, SUBS=SUBS, render=True)
+    for i in range(1, J):
+        X_, Y_, _, _ = rollout(env, pilco, timesteps=T, random=True, SUBS=SUBS, verbose=True, render=True)
+        X = np.vstack((X, X_))
+        Y = np.vstack((Y, Y_))
 
     pilco = PILCO((X, Y), controller=controller, horizon=T, reward=R, m_init=m_init, S_init=S_init)
 
