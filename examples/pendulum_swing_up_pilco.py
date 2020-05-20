@@ -8,6 +8,7 @@ from pilco.plotting_utils import plot_single_rollout_cycle
 from pilco.rewards import ExponentialReward
 import tensorflow as tf
 from utils import rollout, policy
+from matplotlib import pyplot as plt
 from gpflow import set_trainable
 
 np.random.seed(0)
@@ -111,13 +112,14 @@ if __name__ == '__main__':
     for model in pilco.mgpr.models:
         model.likelihood.variance.assign(0.001)
         set_trainable(model.likelihood.variance, False)
-
+    axis_values = np.zeros((N, state_dim))
     r_new = np.zeros((T, 1))
     for rollouts in range(N):
         print("**** ITERATION no", rollouts, " ****")
         pilco.optimize_models(maxiter=maxiter, restarts=2)
         pilco.optimize_policy(maxiter=maxiter, restarts=2)
-
+        s_val = pilco.get_controller().get_S()
+        axis_values[rollouts, :] = s_val.numpy()
         X_new, Y_new, _, _ = rollout(env, pilco, timesteps=T_sim, verbose=True, SUBS=SUBS, render=True)
 
         # Since we had decide on the various parameters of the reward function
@@ -126,17 +128,19 @@ if __name__ == '__main__':
             r_new[:, 0] = R.compute_reward(X_new[i, None, :-1], 0.001 * np.eye(state_dim))[0]
         total_r = sum(r_new)
         _, _, r, intermediary_dict = pilco.predict_and_obtain_intermediates(X_new[0, None, :-1], 0.001 * S_init, T)
-        intermediate_mean, intermediate_var = zip(*intermediary_dict)
-        intermediate_var = list(map(lambda x: x.diagonal(), intermediate_var))
-        intermediate_mean = list(map(lambda x: x[0], intermediate_mean))
-        # state_mean = list(map(lambda x: x[:state_dim], intermediate_mean))
-        # state_var = list(map(lambda x: x[:state_dim], intermediate_var))
-        # control_mean = list(map(lambda x: x[state_dim:], intermediate_mean))
-        # control_var = list(map(lambda x: x[state_dim:], intermediate_var))
         print("Total ", total_r, " Predicted: ", r)
+        plt.figure(3)
+        for c_dim in range(state_dim):
+            plt.plot(axis_values[:rollouts, c_dim])
+        plt.pause(0.01)
+        # Plotting internal states of pilco variables
+        intermediate_mean, intermediate_var = zip(*intermediary_dict)
+        intermediate_var = [x.diagonal() for x in intermediate_var]
+        intermediate_mean = [x[0] for x in intermediate_mean]
         plot_single_rollout_cycle(intermediate_mean, intermediate_var, [X_new], None, state_dim, control_dim, T, 1)
 
         # Update dataset
-        X = np.vstack((X, X_new));
+        X = np.vstack((X, X_new))
         Y = np.vstack((Y, Y_new))
         pilco.mgpr.set_data((X, Y))
+    plt.show()
