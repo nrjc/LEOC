@@ -189,3 +189,6 @@ class CombinedController(gpflow.Module):
     def randomize(self):
         self.rbc_controller.randomize()
         self.linear_controller.randomize()
+
+    def get_S(self):
+        return self.S

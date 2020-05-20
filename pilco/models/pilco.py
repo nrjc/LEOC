@@ -50,6 +50,9 @@ class PILCO(gpflow.models.BayesianModel):
         reward = self.predict(self.m_init, self.S_init, self.horizon)[2]
         return -reward
 
+    def get_controller(self):
+        return self.controller
+
     def optimize_models(self, maxiter=200, restarts=1):
         '''
         Optimize GP models
