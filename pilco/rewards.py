@@ -1,6 +1,7 @@
 import tensorflow as tf
 import numpy as np
 from gpflow import Parameter, Module, config
+
 float_type = config.default_float()
 
 
@@ -32,23 +33,24 @@ class ExponentialReward(Module):
         SW = s @ self.W
 
         iSpW = tf.transpose(
-                tf.linalg.solve( (tf.eye(self.state_dim, dtype=float_type) + SW),
-                tf.transpose(self.W), adjoint=True))
+            tf.linalg.solve((tf.eye(self.state_dim, dtype=float_type) + SW),
+                            tf.transpose(self.W), adjoint=True))
 
-        muR = tf.exp(-(m-self.t) @  iSpW @ tf.transpose(m-self.t)/2) / \
-                tf.sqrt( tf.linalg.det(tf.eye(self.state_dim, dtype=float_type) + SW) )
+        muR = tf.exp(-(m - self.t) @ iSpW @ tf.transpose(m - self.t) / 2) / \
+              tf.sqrt(tf.linalg.det(tf.eye(self.state_dim, dtype=float_type) + SW))
 
         i2SpW = tf.transpose(
-                tf.linalg.solve( (tf.eye(self.state_dim, dtype=float_type) + 2*SW),
-                tf.transpose(self.W), adjoint=True))
+            tf.linalg.solve((tf.eye(self.state_dim, dtype=float_type) + 2 * SW),
+                            tf.transpose(self.W), adjoint=True))
 
-        r2 =  tf.exp(-(m-self.t) @ i2SpW @ tf.transpose(m-self.t)) / \
-                tf.sqrt( tf.linalg.det(tf.eye(self.state_dim, dtype=float_type) + 2*SW) )
+        r2 = tf.exp(-(m - self.t) @ i2SpW @ tf.transpose(m - self.t)) / \
+             tf.sqrt(tf.linalg.det(tf.eye(self.state_dim, dtype=float_type) + 2 * SW))
 
         sR = r2 - muR @ muR
         muR.set_shape([1, 1])
         sR.set_shape([1, 1])
         return muR, sR
+
 
 class LinearReward(Module):
     def __init__(self, state_dim, W):
@@ -76,6 +78,25 @@ class CombinedRewards(Module):
         for reward, coef in zip(self.base_rewards, self.coefs):
             output_mean, output_covariance = reward.compute_reward(m, s)
             total_output_mean += coef * output_mean
-            total_output_covariance += coef**2 * output_covariance
+            total_output_covariance += coef ** 2 * output_covariance
 
         return total_output_mean, total_output_covariance
+
+
+class L2HarmonicPenalization(Module):
+    def __init__(self, list_of_tensors_in_graph_to_penalize=[], scaling_factor=1.):
+        self.penalization_params = list_of_tensors_in_graph_to_penalize
+        self.scaling_factor = scaling_factor
+
+    def compute_reward(self, m, s):
+        mUR = tf.constant(0., dtype=float_type, shape=(1, 1))
+        sR = tf.constant(0., dtype=float_type, shape=(1, 1))
+        for param in self.penalization_params:
+            inner_product = tf.norm(param.read_value(), ord=2, keepdims=True)
+            pen_loss = self.scaling_factor * (inner_product ** 2 + 1) / inner_product
+            pen_loss = tf.expand_dims(pen_loss, 0)
+            pen_loss.set_shape([1, 1])
+            mUR += pen_loss
+        mUR.set_shape([1, 1])
+        sR.set_shape([1, 1])
+        return mUR, sR

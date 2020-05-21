@@ -5,7 +5,7 @@ from pilco.controller_utils import LQR
 from pilco.models import PILCO
 from pilco.controllers import RbfController, LinearController, CombinedController
 from pilco.plotting_utils import plot_single_rollout_cycle
-from pilco.rewards import ExponentialReward
+from pilco.rewards import ExponentialReward, L2HarmonicPenalization, CombinedRewards
 import tensorflow as tf
 from utils import rollout, policy
 from matplotlib import pyplot as plt
@@ -105,6 +105,8 @@ if __name__ == '__main__':
                                     controller_location=np.array([[0, 1, 0]], dtype=np.float64), max_action=max_action,
                                     W=-W_matrix)
     R = ExponentialReward(state_dim=state_dim, t=target, W=weights)
+    c_param = L2HarmonicPenalization([controller.get_S()], 0.01)
+    R = CombinedRewards(state_dim, [R, c_param])
 
     pilco = PILCO((X, Y), controller=controller, horizon=T, reward=R, m_init=m_init, S_init=S_init)
 
