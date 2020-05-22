@@ -34,7 +34,8 @@ class myPendulum():
         high = np.array([np.pi, 1])
         self.env.state = np.random.uniform(low=-high, high=high)
         self.env.state = np.random.uniform(low=0, high=0.01 * high)  # only difference
-        self.env.state[0] += -np.pi
+        if np.random.choice(2) == 0:
+            self.env.state[0] += -np.pi
         self.env.last_u = None
         return self.env._get_obs()
 
