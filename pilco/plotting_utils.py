@@ -41,8 +41,8 @@ def plot_single_rollout_cycle(state_mean: List[np.ndarray], state_var: List[np.n
     for i in range(total_graphs):
         cur_graph_pos_i, cur_graph_pos_j = i // width, i % width
         plot_states = i < internal_state_dim_num
-        plot_actions = i >= internal_state_dim_num & i < (total_graphs - 1)
-        plot_loss = ~plot_states & ~plot_actions
+        plot_actions = i >= internal_state_dim_num and i < (total_graphs - 1)
+        plot_loss = not plot_states and not plot_actions
         cur_axis = axs[cur_graph_pos_i, cur_graph_pos_j]
         if plot_states:
             y = mean_states[:, i]
@@ -60,4 +60,5 @@ def plot_single_rollout_cycle(state_mean: List[np.ndarray], state_var: List[np.n
         if plot_loss:
             cur_axis.set_title(f'Loss')
             continue
+        continue
     fig.show()
