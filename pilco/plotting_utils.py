@@ -28,6 +28,14 @@ def plot_single_rollout_cycle(state_mean: List[np.ndarray], state_var: List[np.n
     mean_states = np.array(state_mean)
     var_states = np.array(state_var)
     rollouts = np.array(rollout)
+    actions = np.array(rollout_action)
+
+
+    states_subtitles = ['cos(theta)', 'sin(theta)', 'theta dot']
+    assert len(states_subtitles) == internal_state_dim_num
+    action_subtitles = ['torque']
+    assert len(action_subtitles) == action_dim_num
+
     # Calculate loss.
     fig, axs = plt.subplots(math.ceil(total_graphs / width), width)
     for i in range(total_graphs):
@@ -42,11 +50,14 @@ def plot_single_rollout_cycle(state_mean: List[np.ndarray], state_var: List[np.n
             cur_axis.errorbar(np.arange(time_steps), y, yerr)
             for s in range(rollout_num):
                 cur_axis.plot(np.arange(time_steps), rollouts[s, :, i])
-                # pass
+            cur_axis.set_title(f'State: {states_subtitles[i]}')
         if plot_actions:
-            # TODO: Plot actions
+            # Plot one of the M subplots for actions
+            j = i - internal_state_dim_num
+            cur_axis.plot(np.arange(time_steps), actions[:, j])
+            cur_axis.set_title(f'Action: {states_subtitles[j]}')
             continue
         if plot_loss:
-            # TODO: Plot Loss
+            cur_axis.set_title(f'Loss')
             continue
     fig.show()
