@@ -5,15 +5,18 @@ import numpy as np
 
 
 def plot_single_rollout_cycle(state_mean: List[np.ndarray], state_var: List[np.ndarray],
-                              rollout: List[List[np.ndarray]], rollout_action: List[np.ndarray], internal_state_dim_num: int, action_dim_num: int,
+                              rollout: List[List[np.ndarray]], rollout_actions: List[np.ndarray],
+                              rollout_reward: List[np.ndarray],
+                              internal_state_dim_num: int, action_dim_num: int,
                               time_steps: int, rollout_num: int):
     """
 
     Args:
-        state_mean: A list (length T) of numpy array of dimension (N), denoting the predicted means at each time step.
-        state_var: A list (length T) of numpy array of dimension (N), denoting the variance at each time step.
-        rollout: A list (length S) of list (length T) of numpy array of dimension (N), denoting the observed parameter state.
-        rollout_action: A list (length T) of numpy array of dimension (M), denoting the actions taken by rollout controller.
+        state_mean: T x N. A list (length T) of numpy array of dimension (N), denoting the predicted means at each time step.
+        state_var: T x N. A list (length T) of numpy array of dimension (N), denoting the variance at each time step.
+        rollout: S x T x N. A list (length S) of list (length T) of numpy array of dimension (N), denoting the observed parameter state.
+        rollout_action: T x M. A list (length T) of numpy array of dimension (M), denoting the actions taken by rollout controller.
+        rollout_reward: T x 1. A list (length T), denoting the reward at each time step.
         internal_state_dim_num: size of internal state dimensions
         action_dim_num: size of action dimensions
         time_steps: time steps
@@ -28,21 +31,26 @@ def plot_single_rollout_cycle(state_mean: List[np.ndarray], state_var: List[np.n
     mean_states = np.array(state_mean)
     var_states = np.array(state_var)
     rollouts = np.array(rollout)
-    actions = np.array(rollout_action)
-
+    assert mean_states.shape[1] == internal_state_dim_num and var_states.shape[1] == internal_state_dim_num, \
+        "Error: States dimensions do not match!"
+    if rollout_actions is not None:
+        actions = np.array(rollout_actions)
+        assert actions.shape[1] == action_dim_num, "Error: Actions dimensions do not match!"
+    if rollout_reward is not None:
+        reward = np.array(rollout_reward)
 
     states_subtitles = ['cos(theta)', 'sin(theta)', 'theta dot']
-    assert len(states_subtitles) == internal_state_dim_num
-    action_subtitles = ['torque']
-    assert len(action_subtitles) == action_dim_num
+    assert len(states_subtitles) == internal_state_dim_num, "Error: Change states_subtitles!"
+    actions_subtitles = ['torque']
+    assert len(actions_subtitles) == action_dim_num, "Error: Change actions_subtitles!"
 
-    # Calculate loss.
+    # Calculate reward.
     fig, axs = plt.subplots(math.ceil(total_graphs / width), width)
     for i in range(total_graphs):
         cur_graph_pos_i, cur_graph_pos_j = i // width, i % width
         plot_states = i < internal_state_dim_num
-        plot_actions = i >= internal_state_dim_num and i < (total_graphs - 1)
-        plot_loss = not plot_states and not plot_actions
+        plot_actions = i >= internal_state_dim_num and i < (total_graphs - 1) and rollout_actions is not None
+        plot_reward = i == total_graphs - 1 and rollout_reward is not None
         cur_axis = axs[cur_graph_pos_i, cur_graph_pos_j]
         if plot_states:
             y = mean_states[:, i]
@@ -55,10 +63,8 @@ def plot_single_rollout_cycle(state_mean: List[np.ndarray], state_var: List[np.n
             # Plot one of the M subplots for actions
             j = i - internal_state_dim_num
             cur_axis.plot(np.arange(time_steps), actions[:, j])
-            cur_axis.set_title(f'Action: {states_subtitles[j]}')
-            continue
-        if plot_loss:
-            cur_axis.set_title(f'Loss')
-            continue
-        continue
+            cur_axis.set_title(f'Action: {actions_subtitles[j]}')
+        if plot_reward:
+            cur_axis.plot(np.arange(time_steps), reward)
+            cur_axis.set_title(f'Reward')
     fig.show()
