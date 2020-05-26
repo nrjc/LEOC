@@ -69,8 +69,8 @@ class LinearController(gpflow.Module):
     def randomize(self):
         mean = 0;
         sigma = 1
-        self.W.assign(mean + sigma * np.random.normal(size=self.W.shape))
-        self.b.assign(mean + sigma * np.random.normal(size=self.b.shape))
+        # self.W.assign(mean + sigma * np.random.normal(size=self.W.shape))
+        # self.b.assign(mean + sigma * np.random.normal(size=self.b.shape))
 
 
 class FakeGPR(gpflow.Module):
@@ -190,6 +190,11 @@ class CombinedController(gpflow.Module):
     def randomize(self):
         self.rbc_controller.randomize()
         self.linear_controller.randomize()
+        mean = 0;
+        sigma = 1
+        self.S.assign(mean + sigma * np.absolute(np.random.normal(size=self.S.shape)))
+
+        # self.b.assign(mean + sigma * np.random.normal(size=self.b.shape))
 
     def get_S(self):
         return self.S
