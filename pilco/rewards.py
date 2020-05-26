@@ -92,8 +92,8 @@ class L2HarmonicPenalization(Module):
         mUR = tf.constant(0., dtype=float_type, shape=(1, 1))
         sR = tf.constant(0., dtype=float_type, shape=(1, 1))
         for param in self.penalization_params:
-            inner_product = tf.norm(param.read_value(), ord=2, keepdims=True)
-            pen_loss = self.scaling_factor * (inner_product ** 2 + 1) / inner_product
+            o = tf.math.reduce_min(param.read_value(), keepdims=True)
+            pen_loss = - self.scaling_factor * tf.math.reciprocal(o + tf.keras.backend.epsilon())
             pen_loss = tf.expand_dims(pen_loss, 0)
             pen_loss.set_shape([1, 1])
             mUR += pen_loss
