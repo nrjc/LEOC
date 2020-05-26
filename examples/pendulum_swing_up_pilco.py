@@ -105,7 +105,7 @@ if __name__ == '__main__':
                                     controller_location=np.array([[0, 1, 0]], dtype=np.float64), max_action=max_action,
                                     W=-W_matrix)
     R = ExponentialReward(state_dim=state_dim, t=target, W=weights)
-    c_param = L2HarmonicPenalization([controller.get_S()], 0.01)
+    c_param = L2HarmonicPenalization([controller.get_S()], 0.0001)
     R = CombinedRewards(state_dim, [R, c_param])
 
     pilco = PILCO((X, Y), controller=controller, horizon=T, reward=R, m_init=m_init, S_init=S_init)
