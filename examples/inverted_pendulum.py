@@ -5,9 +5,9 @@ from pilco.controllers import RbfController, LinearController
 from pilco.rewards import ExponentialReward
 import tensorflow as tf
 from tensorflow import logging
-np.random.seed(0)
-
 from utils import rollout, policy
+
+np.random.seed(0)
 
 with tf.Session(graph=tf.Graph()) as sess:
     env = gym.make('InvertedPendulum-v2')
