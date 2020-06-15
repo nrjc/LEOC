@@ -139,7 +139,7 @@ if __name__ == '__main__':
             plt.plot(axis_values[:rollouts, c_dim])
         plt.pause(0.01)
         # Plotting internal states of pilco variables
-        intermediate_mean, intermediate_var = zip(*intermediary_dict)
+        intermediate_mean, intermediate_var, intermediate_reward = zip(*intermediary_dict)
         intermediate_var = [x.diagonal() for x in intermediate_var]
         intermediate_mean = [x[0] for x in intermediate_mean]
         plot_single_rollout_cycle(intermediate_mean, intermediate_var, [X_new], None, None, state_dim,
