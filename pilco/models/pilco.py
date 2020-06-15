@@ -11,6 +11,9 @@ from .. import rewards
 
 float_type = gpflow.config.default_float()
 from gpflow import set_trainable
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class PILCO(gpflow.models.BayesianModel):
@@ -86,7 +89,7 @@ class PILCO(gpflow.models.BayesianModel):
         mgpr_trainable_params = self.mgpr.trainable_parameters
         for param in mgpr_trainable_params:
             set_trainable(param, False)
-
+        logger.info(f'initial reward: {self.compute_reward()}')
         if not self.optimizer:
             self.optimizer = gpflow.optimizers.Scipy()
             # self.optimizer = tf.optimizers.Adam()

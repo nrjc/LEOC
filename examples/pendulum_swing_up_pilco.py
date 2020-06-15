@@ -1,3 +1,6 @@
+import logging
+
+logging.basicConfig(level=logging.INFO)
 import numpy as np
 import gym
 import collections
@@ -11,7 +14,6 @@ from pilco.rewards import ExponentialReward
 import tensorflow as tf
 # from tensorflow import logging
 from utils import rollout, policy
-
 np.random.seed(0)
 
 # NEEDS a different initialisation than the one in gym (change the reset() method),
