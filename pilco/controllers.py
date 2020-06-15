@@ -15,6 +15,7 @@ from .models import MGPR
 
 float_type = gpflow.config.default_float()
 
+
 def squash_sin(m, s, max_action=None):
     '''
     Squashing function, passing the controls mean and variance
@@ -42,10 +43,13 @@ def squash_sin(m, s, max_action=None):
 
 
 class LinearController(gpflow.Module):
-    def __init__(self, state_dim, control_dim, max_action=None):
+    def __init__(self, state_dim, control_dim, max_action=1.0, W=None, b=None):
         gpflow.Module.__init__(self)
-        self.W = gpflow.Param(np.random.rand(control_dim, state_dim))
-        self.b = gpflow.Param(np.random.rand(1, control_dim))
+        if W is None:
+            self.W = Parameter(np.random.rand(control_dim, state_dim))
+        else:
+            self.W = Parameter(W)
+        self.b = Parameter(np.zeros((1, control_dim), dtype=float_type))
         self.max_action = max_action
 
     def compute_action(self, m, s, squash=True):
@@ -54,18 +58,19 @@ class LinearController(gpflow.Module):
         IN: mean (m) and variance (s) of the state
         OUT: mean (M) and variance (S) of the action
         '''
-        M = m @ tf.transpose(self.W) + self.b # mean output
-        S = self.W @ s @ tf.transpose(self.W) # output variance
-        V = tf.transpose(self.W) #input output covariance
+        M = m @ tf.transpose(self.W) + self.b  # mean output
+        S = self.W @ s @ tf.transpose(self.W)  # output variance
+        V = tf.transpose(self.W)  # input output covariance
         if squash:
             M, S, V2 = squash_sin(M, S, self.max_action)
             V = V @ V2
         return M, S, V
 
     def randomize(self):
-        mean = 0; sigma = 1
-        self.W.assign(mean + sigma*np.random.normal(size=self.W.shape))
-        self.b.assign(mean + sigma*np.random.normal(size=self.b.shape))
+        mean = 0;
+        sigma = 1
+        # self.W.assign(mean + sigma * np.random.normal(size=self.W.shape))
+        # self.b.assign(mean + sigma * np.random.normal(size=self.b.shape))
 
 
 class FakeGPR(gpflow.Module):
@@ -82,13 +87,15 @@ class FakeGPR(gpflow.Module):
         self.likelihood.variance.assign(likelihood_variance)
         set_trainable(self.likelihood.variance, False)
 
+
 class RbfController(MGPR):
     '''
     An RBF Controller implemented as a deterministic GP
     See Deisenroth et al 2015: Gaussian Processes for Data-Efficient Learning in Robotics and Control
     Section 5.3.2.
     '''
-    def __init__(self, state_dim, control_dim, num_basis_functions, max_action=None):
+
+    def __init__(self, state_dim, control_dim, num_basis_functions, max_action=1.0):
         MGPR.__init__(self,
                       [np.random.randn(num_basis_functions, state_dim),
                        0.1 * np.random.randn(num_basis_functions, control_dim)]
@@ -96,7 +103,7 @@ class RbfController(MGPR):
         for model in self.models:
             model.kernel.variance.assign(1.0)
             set_trainable(model.kernel.variance, False)
-            self.max_action = max_action
+        self.max_action = max_action
 
     def create_models(self, data):
         self.models = []
@@ -128,8 +135,66 @@ class RbfController(MGPR):
     def randomize(self):
         print("Randomising controller")
         for m in self.models:
-            mean = 0; sigma = 0.1
-            m.X.assign(mean + sigma*np.random.normal(size=m.X.shape))
-            m.Y.assign(mean + sigma*np.random.normal(size=m.Y.shape))
-            mean = 1; sigma = 0.1
+            m.X.assign(np.random.normal(size=m.data[0].shape))
+            m.Y.assign(self.max_action / 10 * np.random.normal(size=m.data[1].shape))
+            mean = 1;
+            sigma = 0.1
             m.kernel.lengthscales.assign(mean + sigma * np.random.normal(size=m.kernel.lengthscales.shape))
+
+
+class CombinedController(gpflow.Module):
+    '''
+    An RBF Controller implemented as a deterministic GP
+    See Deisenroth et al 2015: Gaussian Processes for Data-Efficient Learning in Robotics and Control
+    Section 5.3.2.
+    '''
+
+    def __init__(self, state_dim, control_dim, num_basis_functions, controller_location=None, max_action=None, W=None,
+                 **kwargs):
+        gpflow.Module.__init__(self)
+        if controller_location is None:
+            controller_location = np.zeros((1, state_dim), float_type)
+        self.rbc_controller = RbfController(state_dim, control_dim, num_basis_functions, max_action)
+        self.linear_controller = LinearController(state_dim, control_dim, max_action, W=W)
+        self.a = Parameter(controller_location, trainable=False)
+        self.S = Parameter(np.ones((state_dim), float_type),
+                           transform=positive())
+        self.zeta = Parameter(0.1, transform=positive(), trainable=False)
+        self.max_action = max_action
+
+    def compute_ratio(self, x):
+        '''
+        Compute the ratio of the linear controller
+        '''
+        r = (x - self.a.read_value()) @ tf.linalg.diag(self.S.read_value()) @ tf.transpose(x - self.a.read_value())
+        ratio = -1 / math.pi * tf.math.atan2(- r * self.zeta.read_value(), (1 - tf.math.pow(r, 2)))
+        return ratio
+
+    def compute_action(self, m, s, squash=True):
+        '''
+        RBF Controller. See Deisenroth's Thesis Section
+        IN: mean (m) and variance (s) of the state
+        OUT: mean (M) and variance (S) of the action
+        '''
+        r = 1 - self.compute_ratio(m)
+        M1, S1, V1 = self.linear_controller.compute_action(m, s, False)
+        M2, S2, V2 = self.rbc_controller.compute_action(m, s, False)
+        M = (1 - r) * M1 + r * M2
+        S = (1 - r) * S1 + r * S2 + (1 - r) * (M1 - M) @ tf.transpose(M1 - M) + r * (M2 - M) @ tf.transpose(M2 - M)
+        V = (1 - r) * V1 + r * V2
+        if squash:
+            M, S, V2 = squash_sin(M, S, self.max_action)
+            V = V @ V2
+        return M, S, V
+
+    def randomize(self):
+        self.rbc_controller.randomize()
+        self.linear_controller.randomize()
+        mean = 0;
+        sigma = 1
+        self.S.assign(mean + sigma * np.absolute(np.random.normal(size=self.S.shape)))
+
+        # self.b.assign(mean + sigma * np.random.normal(size=self.b.shape))
+
+    def get_S(self):
+        return self.S
