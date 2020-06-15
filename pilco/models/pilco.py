@@ -1,3 +1,4 @@
+import logging
 import numpy as np
 import tensorflow as tf
 import gpflow
@@ -12,6 +13,7 @@ from .. import rewards
 float_type = gpflow.config.default_float()
 from gpflow import set_trainable
 
+logger = logging.getLogger(__name__)
 
 class PILCO(gpflow.models.BayesianModel):
     def __init__(self, data, num_induced_points=None, horizon=30, controller=None,
@@ -86,7 +88,7 @@ class PILCO(gpflow.models.BayesianModel):
         mgpr_trainable_params = self.mgpr.trainable_parameters
         for param in mgpr_trainable_params:
             set_trainable(param, False)
-
+        logger.info(f'initial reward: {self.compute_reward()}')
         if not self.optimizer:
             self.optimizer = gpflow.optimizers.Scipy()
             # self.optimizer = tf.optimizers.Adam()
@@ -142,7 +144,7 @@ class PILCO(gpflow.models.BayesianModel):
 
     def run_condition(self, m_x, s_x, cur_timestep, cur_reward, recording_list=None):
         if recording_list is not None:
-            recording_list.append((m_x.numpy(), s_x.numpy()))
+            recording_list.append((m_x.numpy(), s_x.numpy(), cur_reward))
         return (
             cur_timestep + 1, *self.propagate(m_x, s_x), tf.add(cur_reward, self.reward.compute_reward(m_x, s_x)[0]))
 
