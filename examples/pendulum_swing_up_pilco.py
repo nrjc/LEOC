@@ -95,22 +95,21 @@ if __name__ == '__main__':
     W_matrix = LQR().get_W_matrix(A, B, C)
 
     # Initial random rollouts to generate a dataset
-    X, Y, _, _ = rollout(env, None, timesteps=T, random=True, SUBS=SUBS, render=True)
+
+    state_dim = 3
+    control_dim = 1
+    # controller = LinearController(state_dim=state_dim, control_dim=control_dim, W=-W_matrix, max_action=1)
+    controller = CombinedController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf,
+                                    controller_location=target,
+                                    W=-W_matrix, max_action=1)
+    R = ExponentialReward(state_dim=state_dim, t=target, W=weights)
+    # c_param = L2HarmonicPenalization([controller.get_S()], 0.0001)
+    # R = CombinedRewards(state_dim, [R, c_param])
+    X, Y, _, _ = rollout(env, None, timesteps=T, random=True, SUBS=SUBS, render=True, verbose=False)
     for i in range(1, J):
-        X_, Y_, _, _ = rollout(env, None, timesteps=T, random=True, SUBS=SUBS, verbose=True, render=True)
+        X_, Y_, _, _ = rollout(env, None, timesteps=T, random=True, SUBS=SUBS, verbose=False, render=True)
         X = np.vstack((X, X_))
         Y = np.vstack((Y, Y_))
-
-    state_dim = Y.shape[1]
-    control_dim = X.shape[1] - state_dim
-
-    controller = CombinedController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf,
-                                    controller_location=np.array([[0, 1, 0]], dtype=np.float64), max_action=max_action,
-                                    W=-W_matrix)
-    R = ExponentialReward(state_dim=state_dim, t=target, W=weights)
-    c_param = L2HarmonicPenalization([controller.get_S()], 0.0001)
-    R = CombinedRewards(state_dim, [R, c_param])
-
     pilco = PILCO((X, Y), controller=controller, horizon=T, reward=R, m_init=m_init, S_init=S_init)
 
     # for numerical stability, we can set the likelihood variance parameters of the GP models
@@ -125,7 +124,7 @@ if __name__ == '__main__':
         pilco.optimize_policy(maxiter=maxiter, restarts=2)
         s_val = pilco.get_controller().get_S()
         axis_values[rollouts, :] = s_val.numpy()
-        X_new, Y_new, _, _ = rollout(env, pilco, timesteps=T_sim, verbose=True, SUBS=SUBS, render=True)
+        X_new, Y_new, _, _ = rollout(env, pilco, timesteps=T_sim, verbose=False, SUBS=SUBS, render=True)
 
         # Since we had decide on the various parameters of the reward function
         # we might want to verify that it behaves as expected by inspection
