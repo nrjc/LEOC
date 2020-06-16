@@ -176,7 +176,7 @@ class CombinedController(gpflow.Module):
         IN: mean (m) and variance (s) of the state
         OUT: mean (M) and variance (S) of the action
         '''
-        r = 1 - self.compute_ratio(m)
+        r = self.compute_ratio(m)
         M1, S1, V1 = self.linear_controller.compute_action(m, s, False)
         M2, S2, V2 = self.rbc_controller.compute_action(m, s, False)
         M = (1 - r) * M1 + r * M2

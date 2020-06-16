@@ -37,7 +37,7 @@ class myPendulum():
         high = np.array([np.pi, 1])
         self.env.state = np.random.uniform(low=-high, high=high)
         self.env.state = np.random.uniform(low=0, high=0.01 * high)  # only difference
-        # self.env.state[0] += -np.pi
+        self.env.state[0] += -np.pi
         self.env.last_u = None
         return self.env._get_obs()
 
@@ -101,7 +101,7 @@ if __name__ == '__main__':
     # controller = LinearController(state_dim=state_dim, control_dim=control_dim, W=-W_matrix, max_action=1)
     controller = CombinedController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf,
                                     controller_location=target,
-                                    W=-W_matrix)
+                                    W=-W_matrix, max_action=1)
     R = ExponentialReward(state_dim=state_dim, t=target, W=weights)
     # c_param = L2HarmonicPenalization([controller.get_S()], 0.0001)
     # R = CombinedRewards(state_dim, [R, c_param])
@@ -120,10 +120,10 @@ if __name__ == '__main__':
     r_new = np.zeros((T, 1))
     for rollouts in range(N):
         print("**** ITERATION no", rollouts, " ****")
-        # pilco.optimize_models(maxiter=maxiter, restarts=2)
-        # pilco.optimize_policy(maxiter=maxiter, restarts=2)
-        # s_val = pilco.get_controller().get_S()
-        # axis_values[rollouts, :] = s_val.numpy()
+        pilco.optimize_models(maxiter=maxiter, restarts=2)
+        pilco.optimize_policy(maxiter=maxiter, restarts=2)
+        s_val = pilco.get_controller().get_S()
+        axis_values[rollouts, :] = s_val.numpy()
         X_new, Y_new, _, _ = rollout(env, pilco, timesteps=T_sim, verbose=False, SUBS=SUBS, render=True)
 
         # Since we had decide on the various parameters of the reward function
