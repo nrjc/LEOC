@@ -157,7 +157,7 @@ class CombinedController(gpflow.Module):
         self.rbc_controller = RbfController(state_dim, control_dim, num_basis_functions, max_action)
         self.linear_controller = LinearController(state_dim, control_dim, max_action, W=W)
         self.a = Parameter(controller_location, trainable=False)
-        self.S = Parameter(np.ones((state_dim), float_type),
+        self.S = Parameter(0.05*np.ones((state_dim), float_type),
                            transform=positive())
         self.zeta = Parameter(0.1, transform=positive(), trainable=False)
         self.max_action = max_action
