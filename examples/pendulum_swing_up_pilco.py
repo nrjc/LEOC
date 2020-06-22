@@ -46,7 +46,7 @@ class myPendulum():
 
     def control(self):
         # m := mass of pendulum
-        # l := length of pendulum
+        # l := length of pendulum from end to centre
         # b := coefficient of friction of pendulum
         b = 0
         g = self.env.g
@@ -76,6 +76,7 @@ class myPendulum():
 
 
 if __name__ == '__main__':
+    # Define params
     SUBS = 3
     bf = 60
     maxiter = 50
@@ -90,11 +91,10 @@ if __name__ == '__main__':
     N = 8
     restarts = 2
 
+    # Set up objects and variables
     env = myPendulum()
     A, B, C = env.control()
-    W_matrix = LQR().get_W_matrix(A, B, C)
-
-    # Initial random rollouts to generate a dataset
+    W_matrix = LQR().get_W_matrix(A, B, C, env='swing up')
 
     state_dim = 3
     control_dim = 1
@@ -105,9 +105,11 @@ if __name__ == '__main__':
     R = ExponentialReward(state_dim=state_dim, t=target, W=weights)
     # c_param = L2HarmonicPenalization([controller.get_S()], 0.0001)
     # R = CombinedRewards(state_dim, [R, c_param])
+
+    # Initial random rollouts to generate a dataset
     X, Y, _, _ = rollout(env, None, timesteps=T, random=True, SUBS=SUBS, render=True, verbose=False)
     for i in range(1, J):
-        X_, Y_, _, _ = rollout(env, None, timesteps=T, random=True, SUBS=SUBS, verbose=False, render=True)
+        X_, Y_, _, _ = rollout(env, None, timesteps=T, random=True, SUBS=SUBS, render=True, verbose=False)
         X = np.vstack((X, X_))
         Y = np.vstack((Y, Y_))
     pilco = PILCO((X, Y), controller=controller, horizon=T, reward=R, m_init=m_init, S_init=S_init)
