@@ -100,8 +100,7 @@ if __name__ == '__main__':
     control_dim = 1
     # controller = LinearController(state_dim=state_dim, control_dim=control_dim, W=-W_matrix, max_action=1)
     controller = CombinedController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf,
-                                    controller_location=target,
-                                    W=-W_matrix, max_action=2.0)
+                                    controller_location=target, W=-W_matrix, max_action=2.0)
     R = ExponentialReward(state_dim=state_dim, t=target, W=weights)
     # c_param = L2HarmonicPenalization([controller.get_S()], 0.0001)
     # R = CombinedRewards(state_dim, [R, c_param])
