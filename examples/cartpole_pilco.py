@@ -6,6 +6,7 @@ from pilco.models import PILCO
 from pilco.controllers import RbfController, LinearController, CombinedController
 from pilco.plotting_utils import plot_single_rollout_cycle
 from pilco.rewards import ExponentialReward
+from examples.envs.cartpole_env import CartPoleEnv
 import tensorflow as tf
 from utils import rollout, policy
 from matplotlib import pyplot as plt
@@ -16,7 +17,7 @@ np.random.seed(0)
 
 class myPendulum():
     def __init__(self):
-        self.env = gym.make('InvertedPendulum-v2').env
+        self.env = CartPoleEnv() # self.env = gym.make('CartPole-v1').env
         self.action_space = self.env.action_space
         self.observation_space = self.env.observation_space
 
@@ -39,16 +40,14 @@ class myPendulum():
         # M := mass of cart
         # m := mass of pole
         # l := length of pole from end to centre
-        # b := coefficient of friction of cart
-        cart_id = self.env.sim.model.body_name2id('cart')
-        pole_id = self.env.sim.model.body_name2id('pole')
+        # b := coefficient of friction of cart, this is 0 in 'InvertedPendulum-v1' env
         b = 0
-        M = self.env.sim.model.body_mass[cart_id]
-        m = self.env.sim.model.body_mass[pole_id]
+        M = self.env.masscart
+        m = self.env.masspole
         l = self.env.length
         g = self.env.gravity
         I = 1 / 12 * m * (l ** 2)
-        p = I * (M + m) + M * m * (r ** 2)
+        p = I * (M + m) + M * m * (l ** 2)
 
         # using x to approximate sin(x) and 1-x to approximate cos(x)
         A = np.array([[0,                           1,                              0, 0],
@@ -86,27 +85,28 @@ if __name__ == '__main__':
     N = 8
     restarts = 2
 
-    env = myPendulum()
-    A, B, C = env.control()
-    W_matrix = LQR().get_W_matrix(A, B, C, env='inverted')
-
-    # Set up objects and variables
-    state_dim = 4
-    control_dim = 1
-    controller = LinearController(state_dim=state_dim, control_dim=control_dim, W=-W_matrix, max_action=1.0)
-    # controller = CombinedController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf,
-    #                                 controller_location=target,
-    #                                 W=-W_matrix, max_action=2.0)
-    R = ExponentialReward(state_dim=state_dim, t=target, W=weights)
-
-    # Initial random rollouts to generate a dataset
-    X, Y, _, _ = rollout(env=env, pilco=None, timesteps=T, random=True, SUBS=SUBS, render=True, verbose=False)
-    for i in range(1, J):
-        X_, Y_, _, _ = rollout(env=env, pilco=None, timesteps=T, random=True, SUBS=SUBS, render=True, verbose=False)
-        X = np.vstack((X, X_))
-        Y = np.vstack((Y, Y_))
-    pilco = PILCO((X, Y), controller=controller, horizon=T, reward=R, m_init=m_init, S_init=S_init)
-    np.random.seed(0)
+    # env = myPendulum()
+    # A, B, C = env.control()
+    # W_matrix = LQR().get_W_matrix(A, B, C, env='cartpole')
+    #
+    # # Set up objects and variables
+    # state_dim = env.observation_space.shape[0]
+    # control_dim = 1
+    # # In 'CartPole-v1', control actions are discrete
+    # controls_discrete = {'left': 0, 'right': 1}
+    # controller = LinearController(state_dim=state_dim, control_dim=control_dim, W=-W_matrix, max_action=1.0)
+    # # controller = CombinedController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf,
+    # #                                 controller_location=target, W=-W_matrix, max_action=2.0)
+    # R = ExponentialReward(state_dim=state_dim, t=target, W=weights)
+    #
+    # # Initial random rollouts to generate a dataset
+    # X, Y, _, _ = rollout(env=env, pilco=None, timesteps=T, random=True, SUBS=SUBS, render=True, verbose=False)
+    # for i in range(1, J):
+    #     X_, Y_, _, _ = rollout(env=env, pilco=None, timesteps=T, random=True, SUBS=SUBS, render=True, verbose=False)
+    #     X = np.vstack((X, X_))
+    #     Y = np.vstack((Y, Y_))
+    # pilco = PILCO((X, Y), controller=controller, horizon=T, reward=R, m_init=m_init, S_init=S_init)
+    # np.random.seed(0)
 
     # state_dim = Y.shape[1]
     # control_dim = X.shape[1] - state_dim
@@ -134,3 +134,17 @@ if __name__ == '__main__':
     #     X = np.vstack((X, X_new))
     #     Y = np.vstack((Y, Y_new))
     #     pilco.mgpr.set_XY(X, Y)
+
+    env = CartPoleEnv()
+    for i_episode in range(20):
+        observation = env.reset()
+        for t in range(100):
+            env.render()
+            print(observation)
+            action = env.action_space.sample()
+            print(action)
+            observation, reward, done, info = env.step(action)
+            if done:
+                print("Episode finished after {} timesteps".format(t + 1))
+                break
+    env.close()
