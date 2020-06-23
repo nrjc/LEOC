@@ -15,7 +15,7 @@ class LQR:
 
     def get_k_prime(self, K, env='swing up'):
         # reference http://ctms.engin.umich.edu/CTMS/index.php?example=InvertedPendulum&section=ControlStateSpace#6
-        assert (env == 'swing up' or env == 'cartpole'), print('--- LQR.get_k_prime() error! ---')
+        assert (env == 'swing up' or env == 'cartpole'), "--- LQR.get_k_prime() error! ---"
 
         # Convert K to ndarray
         K = K.A

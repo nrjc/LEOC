@@ -57,7 +57,7 @@ class myCartPole():
                       [0,            -(m * l * b) / p,        m * g * l * (M + m) / p, 0]])
 
         B = np.array([[0],
-                      [(I + m * l ** 2) / p],
+                      [(I + m * (l ** 2)) / p],
                       [0],
                       [m * l / p]])
 
@@ -88,7 +88,7 @@ if __name__ == '__main__':
 
     env = myCartPole()
     A, B, C = env.control()
-    W_matrix = LQR().get_W_matrix(A, B, C, env='inverted')
+    W_matrix = LQR().get_W_matrix(A, B, C, env='cartpole')
 
     # Set up objects and variables
     state_dim = env.observation_space.shape[0]

@@ -56,7 +56,7 @@ class myPendulum():
                       [0,            -(m * l * b) / p,        m * g * l * (M + m) / p, 0]])
 
         B = np.array([[0],
-                      [(I + m * l ** 2) / p],
+                      [(I + m * (l ** 2)) / p],
                       [0],
                       [m * l / p]])
 
