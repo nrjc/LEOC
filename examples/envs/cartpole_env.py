@@ -101,14 +101,15 @@ class CartPoleEnv(gym.Env):
         assert self.action_space.contains(action), err_msg
 
         x, x_dot, theta, theta_dot = self.state
-        force = self.force_mag if action == 1 else -self.force_mag
+        force = action
         costheta = math.cos(theta)
         sintheta = math.sin(theta)
 
         # For the interested reader:
         # https://coneural.org/florian/papers/05_cart_pole.pdf
         temp = (force + self.polemass_length * theta_dot ** 2 * sintheta) / self.total_mass
-        thetaacc = (self.gravity * sintheta - costheta * temp) / (self.length * (4.0 / 3.0 - self.masspole * costheta ** 2 / self.total_mass))
+        thetaacc = (self.gravity * sintheta - costheta * temp) / (
+                self.length * (4.0 / 3.0 - self.masspole * costheta ** 2 / self.total_mass))
         xacc = temp - self.polemass_length * thetaacc * costheta / self.total_mass
 
         if self.kinematics_integrator == 'euler':
@@ -127,8 +128,6 @@ class CartPoleEnv(gym.Env):
         done = bool(
             x < -self.x_threshold
             or x > self.x_threshold
-            or theta < -self.theta_threshold_radians
-            or theta > self.theta_threshold_radians
         )
 
         if not done:
@@ -148,7 +147,7 @@ class CartPoleEnv(gym.Env):
             self.steps_beyond_done += 1
             reward = 0.0
 
-        return np.array(self.state), reward, done, {}
+        return self._get_obs(), reward, done, {}
 
     def reset(self):
         self.state = self.np_random.uniform(low=-0.05, high=0.05, size=(4,))
@@ -160,7 +159,7 @@ class CartPoleEnv(gym.Env):
         screen_height = 400
 
         world_width = self.x_threshold * 2
-        scale = screen_width/world_width
+        scale = screen_width / world_width
         carty = 100  # TOP OF CART
         polewidth = 10.0
         polelen = scale * (2 * self.length)
@@ -183,7 +182,7 @@ class CartPoleEnv(gym.Env):
             pole.add_attr(self.poletrans)
             pole.add_attr(self.carttrans)
             self.viewer.add_geom(pole)
-            self.axle = rendering.make_circle(polewidth/2)
+            self.axle = rendering.make_circle(polewidth / 2)
             self.axle.add_attr(self.poletrans)
             self.axle.add_attr(self.carttrans)
             self.axle.set_color(.5, .5, .8)
@@ -208,6 +207,9 @@ class CartPoleEnv(gym.Env):
         self.poletrans.set_rotation(-x[2])
 
         return self.viewer.render(return_rgb_array=mode == 'rgb_array')
+
+    def _get_obs(self):
+        return np.array(self.state).ravel()
 
     def close(self):
         if self.viewer:
