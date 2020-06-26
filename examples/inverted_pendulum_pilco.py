@@ -45,8 +45,8 @@ class myCartPole():
         b = 0
         M = self.env.sim.model.body_mass[cart_id]
         m = self.env.sim.model.body_mass[pole_id]
-        l = self.env.length
-        g = self.env.gravity
+        l = self.env.sim.model.body_ipos[pole_id][2]
+        g = 9.81
         I = 1 / 12 * m * (l ** 2)
         p = I * (M + m) + M * m * (l ** 2)
 
