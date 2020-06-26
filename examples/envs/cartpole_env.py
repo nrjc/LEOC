@@ -78,7 +78,11 @@ class CartPoleEnv(gym.Env):
                          self.theta_threshold_radians * 2,
                          np.finfo(np.float32).max],
                         dtype=np.float32)
-        self.observation_space = spaces.Box(-high, high, dtype=np.float32)
+        self.observation_space = spaces.Box(
+            low=-high,
+            high=high,
+            dtype=np.float32
+        )
         self.action_space = spaces.Box(
             low=-self.force_max,
             high=self.force_max,
@@ -210,7 +214,8 @@ class CartPoleEnv(gym.Env):
 
     def _get_obs(self):
         x, x_dot, theta, theta_dot = self.state
-        return np.array([x, x_dot, np.cos(theta), np.sin(theta), theta_dot])
+        obs = np.array([x, x_dot, np.cos(theta), np.sin(theta), theta_dot]).reshape(-1)
+        return obs
 
     def close(self):
         if self.viewer:

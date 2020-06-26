@@ -27,7 +27,7 @@ class LQR:
             K_prime = [[0, K[0][0], K[0][1]]]
 
         elif env == 'cartpole':
-            # K := [x, xdot/vel, theta/pos, thetadot]
-            # 'InvertedPendulum-v1' gym env states = [pos, vel]
-            K_prime = [[K[0][2], K[0][1]]]
+            # K := [x, x_dot, theta, theta_dot]
+            # Our own cartpole env states = [x, x_dot, np.cos(theta), np.sin(theta), theta_dot]
+            K_prime = [[K[0][0], K[0][1], 0, K[0][2], K[0][3]]]
         return K_prime
