@@ -25,10 +25,10 @@ class myPendulum():
         return self.env.step(action)
 
     def reset(self):
-        high = np.array([np.pi, 1])
+        high = np.array([1, 1, np.pi, 1])
         self.env.state = np.random.uniform(low=-high, high=high)
         self.env.state = np.random.uniform(low=0, high=0.01 * high)  # only difference
-        self.env.state[0] += -np.pi
+        self.env.state[2] += -np.pi
         self.env.last_u = None
         return self.env._get_obs()
 
@@ -75,26 +75,28 @@ if __name__ == '__main__':
     bf = 60
     maxiter = 50
     max_action = 2.0
-    target = np.array([1.0, 0.0, 0.0])
-    weights = np.diag([2.0, 2.0, 0.3])
-    m_init = np.reshape([-1.0, 0, 0.0], (1, 3))
-    S_init = np.diag([0.01, 0.05, 0.01])
     T = 40
     T_sim = T
     J = 5
     N = 8
     restarts = 2
 
+    # Need to double check init values
+    target = np.array([0.0, 0.0, 1.0, 0.0, 0.0])
+    weights = np.diag([0.0, 0.0, 2.0, 2.0, 0.3])
+    m_init = np.reshape([0.0, 0.0, -1.0, 0, 0.0], (1, 5))
+    S_init = np.diag([0.01, 0.01, 0.01, 0.05, 0.01])
+
     env = myPendulum()
     A, B, C = env.control()
     W_matrix = LQR().get_W_matrix(A, B, C, env='cartpole')
 
     # Set up objects and variables
-    state_dim = env.observation_space.shape[0]
+    state_dim = 5 # state_dim = env.observation_space.shape[0]
     control_dim = 1
     controller = LinearController(state_dim=state_dim, control_dim=control_dim, W=-W_matrix, max_action=1.0)
     # controller = CombinedController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf,
-    #                                 controller_location=target, W=-W_matrix, max_action=2.0)
+    #                                 controller_location=target, W=-W_matrix, max_action=max_action)
     R = ExponentialReward(state_dim=state_dim, t=target, W=weights)
 
     # Initial random rollouts to generate a dataset
@@ -133,16 +135,16 @@ if __name__ == '__main__':
     #     Y = np.vstack((Y, Y_new))
     #     pilco.mgpr.set_XY(X, Y)
 
-    env = CartPoleEnv()
-    for i_episode in range(20):
-        observation = env.reset()
-        for t in range(100):
-            env.render()
-            print(observation)
-            action = env.action_space.sample()
-            print(action)
-            observation, reward, done, info = env.step(action)
-            if done:
-                print("Episode finished after {} timesteps".format(t + 1))
-                break
-    env.close()
+    # env = CartPoleEnv()
+    # for i_episode in range(20):
+    #     observation = env.reset()
+    #     for t in range(100):
+    #         env.render()
+    #         print(observation)
+    #         action = env.action_space.sample()
+    #         print(action)
+    #         observation, reward, done, info = env.step(action)
+    #         if done:
+    #             print("Episode finished after {} timesteps".format(t + 1))
+    #             break
+    # env.close()
