@@ -85,28 +85,26 @@ if __name__ == '__main__':
     N = 8
     restarts = 2
 
-    # env = myPendulum()
-    # A, B, C = env.control()
-    # W_matrix = LQR().get_W_matrix(A, B, C, env='cartpole')
-    #
-    # # Set up objects and variables
-    # state_dim = env.observation_space.shape[0]
-    # control_dim = 1
-    # # In 'CartPole-v1', control actions are discrete
-    # controls_discrete = {'left': 0, 'right': 1}
-    # controller = LinearController(state_dim=state_dim, control_dim=control_dim, W=-W_matrix, max_action=1.0)
-    # # controller = CombinedController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf,
-    # #                                 controller_location=target, W=-W_matrix, max_action=2.0)
-    # R = ExponentialReward(state_dim=state_dim, t=target, W=weights)
-    #
-    # # Initial random rollouts to generate a dataset
-    # X, Y, _, _ = rollout(env=env, pilco=None, timesteps=T, random=True, SUBS=SUBS, render=True, verbose=False)
-    # for i in range(1, J):
-    #     X_, Y_, _, _ = rollout(env=env, pilco=None, timesteps=T, random=True, SUBS=SUBS, render=True, verbose=False)
-    #     X = np.vstack((X, X_))
-    #     Y = np.vstack((Y, Y_))
-    # pilco = PILCO((X, Y), controller=controller, horizon=T, reward=R, m_init=m_init, S_init=S_init)
-    # np.random.seed(0)
+    env = myPendulum()
+    A, B, C = env.control()
+    W_matrix = LQR().get_W_matrix(A, B, C, env='cartpole')
+
+    # Set up objects and variables
+    state_dim = env.observation_space.shape[0]
+    control_dim = 1
+    controller = LinearController(state_dim=state_dim, control_dim=control_dim, W=-W_matrix, max_action=1.0)
+    # controller = CombinedController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf,
+    #                                 controller_location=target, W=-W_matrix, max_action=2.0)
+    R = ExponentialReward(state_dim=state_dim, t=target, W=weights)
+
+    # Initial random rollouts to generate a dataset
+    X, Y, _, _ = rollout(env=env, pilco=None, timesteps=T, random=True, SUBS=SUBS, render=True, verbose=False)
+    for i in range(1, J):
+        X_, Y_, _, _ = rollout(env=env, pilco=None, timesteps=T, random=True, SUBS=SUBS, render=True, verbose=False)
+        X = np.vstack((X, X_))
+        Y = np.vstack((Y, Y_))
+    pilco = PILCO((X, Y), controller=controller, horizon=T, reward=R, m_init=m_init, S_init=S_init)
+    np.random.seed(0)
 
     # state_dim = Y.shape[1]
     # control_dim = X.shape[1] - state_dim
