@@ -28,7 +28,8 @@ class myPendulum():
         high = np.array([1, 1, np.pi, 1])
         self.env.state = np.random.uniform(low=-high, high=high)
         self.env.state = np.random.uniform(low=0, high=0.01 * high)  # only difference
-        self.env.state[2] += -np.pi
+        # self.env.state[2] += -np.pi
+        self.env.state[2] = 0.1
         self.env.last_u = None
         return self.env._get_obs()
 
@@ -82,9 +83,10 @@ if __name__ == '__main__':
     restarts = 2
 
     # Need to double check init values
+    # States := [x, x_dot, cos(theta), sin(theta), theta_dot]
     target = np.array([0.0, 0.0, 1.0, 0.0, 0.0])
-    weights = np.diag([0.0, 0.0, 2.0, 2.0, 0.3])
-    m_init = np.reshape([0.0, 0.0, -1.0, 0, 0.0], (1, 5))
+    weights = np.diag([1.0, 0.3, 2.0, 2.0, 0.3])
+    m_init = np.reshape([0.0, 0.0, 1.0, 0.0, 0.0], (1, 5))
     S_init = np.diag([0.01, 0.01, 0.01, 0.05, 0.01])
 
     env = myPendulum()

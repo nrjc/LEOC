@@ -214,7 +214,8 @@ class CartPoleEnv(gym.Env):
 
     def _get_obs(self):
         x, x_dot, theta, theta_dot = self.state
-        return np.array([x, x_dot, np.cos(theta), np.sin(theta), theta_dot])
+        obs = np.array([x, x_dot, np.cos(theta), np.sin(theta), theta_dot]).reshape(-1)
+        return obs
 
     def close(self):
         if self.viewer:
