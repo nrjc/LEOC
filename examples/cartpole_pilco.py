@@ -16,7 +16,7 @@ from gpflow import set_trainable
 np.random.seed(0)
 
 
-class myPendulum():
+class myCartpole():
     def __init__(self):
         self.env = CartPoleEnv() # self.env = gym.make('CartPole-v1').env
         self.action_space = self.env.action_space
@@ -93,14 +93,14 @@ if __name__ == '__main__':
     m_init = np.reshape([0.0, 0.0, 1.0, 0.0, 0.0], (1, 5))
     S_init = np.diag([0.01, 0.01, 0.01, 0.05, 0.01])
 
-    env = myPendulum()
+    env = myCartpole()
     A, B, C = env.control()
     W_matrix = LQR().get_W_matrix(A, B, C, env='cartpole')
 
     # Set up objects and variables
     state_dim = 5 # state_dim = env.observation_space.shape[0]
     control_dim = 1
-    controller = LinearController(state_dim=state_dim, control_dim=control_dim, W=-W_matrix, max_action=1.0)
+    controller = LinearController(state_dim=state_dim, control_dim=control_dim, W=-W_matrix, max_action=max_action)
     # controller = CombinedController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf,
     #                                 controller_location=target, W=-W_matrix, max_action=max_action)
     R = ExponentialReward(state_dim=state_dim, t=target, W=weights)
@@ -126,15 +126,15 @@ if __name__ == '__main__':
     #     Y = np.vstack((Y, Y_new))
     #     pilco.mgpr.set_XY(X, Y)
 
-    # states = np.asarray(env.reset()).astype(np.float32)
     states = env.reset()
-    for i in range(N):
+    for i in range(10):
         env.render()
-        action = controller.compute_action(tf.reshape(tf.convert_to_tensor(states), (1, -1)),
-                                           tf.zeros([state_dim, state_dim], dtype=tf.dtypes.float64),
-                                           squash=False)[0]
-        action_eval = action[0, :].numpy()
-        states, _, _, _ = env.step(action_eval)
-        print(f'Step: {i}, action: {action_eval}')
+        # action = controller.compute_action(tf.reshape(tf.convert_to_tensor(states), (1, -1)),
+        #                                    tf.zeros([state_dim, state_dim], dtype=tf.dtypes.float64),
+        #                                    squash=False)[0]
+        # action = action[0, :].numpy()
+        action = np.asanyarray([10.0])
+        states, _, _, _ = env.step(action)
+        print(f'Step: {i}, action: {action}')
 
     env.close()
