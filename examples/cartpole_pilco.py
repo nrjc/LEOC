@@ -79,7 +79,7 @@ if __name__ == '__main__':
     SUBS = 3
     bf = 60
     maxiter = 50
-    max_action = 2.0
+    max_action = 50.0
     T = 40
     T_sim = T
     J = 5
@@ -100,7 +100,7 @@ if __name__ == '__main__':
     # Set up objects and variables
     state_dim = 5 # state_dim = env.observation_space.shape[0]
     control_dim = 1
-    controller = LinearController(state_dim=state_dim, control_dim=control_dim, W=-W_matrix, max_action=max_action)
+    controller = LinearController(state_dim=state_dim, control_dim=control_dim, W=W_matrix, max_action=max_action)
     # controller = CombinedController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf,
     #                                 controller_location=target, W=-W_matrix, max_action=max_action)
     R = ExponentialReward(state_dim=state_dim, t=target, W=weights)
@@ -127,13 +127,12 @@ if __name__ == '__main__':
     #     pilco.mgpr.set_XY(X, Y)
 
     states = env.reset()
-    for i in range(10):
+    for i in range(100):
         env.render()
-        # action = controller.compute_action(tf.reshape(tf.convert_to_tensor(states), (1, -1)),
-        #                                    tf.zeros([state_dim, state_dim], dtype=tf.dtypes.float64),
-        #                                    squash=False)[0]
-        # action = action[0, :].numpy()
-        action = np.asanyarray([10.0])
+        action = controller.compute_action(tf.reshape(tf.convert_to_tensor(states), (1, -1)),
+                                           tf.zeros([state_dim, state_dim], dtype=tf.dtypes.float64),
+                                           squash=False)[0]
+        action = action[0, :].numpy()
         states, _, _, _ = env.step(action)
         print(f'Step: {i}, action: {action}')
 

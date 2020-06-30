@@ -28,6 +28,6 @@ class LQR:
 
         elif env == 'cartpole':
             # K := [x, x_dot, theta, theta_dot]
-            # Our own cartpole env states = [x, x_dot, np.cos(theta), np.sin(theta), theta_dot]
+            # Cartpole env states = [x, x_dot, np.cos(theta), np.sin(theta), theta_dot]
             K_prime = [[K[0][0], K[0][1], 0, K[0][2], K[0][3]]]
         return K_prime
