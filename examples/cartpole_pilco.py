@@ -133,7 +133,7 @@ if __name__ == '__main__':
         action = controller.compute_action(tf.reshape(tf.convert_to_tensor(states), (1, -1)),
                                            tf.zeros([state_dim, state_dim], dtype=tf.dtypes.float64),
                                            squash=False)[0]
-        action_eval = action.eval()[0, :] + random.normalvariate(0, 0.1)
+        action_eval = action[0, :].numpy()
         states, _, _, _ = env.step(action_eval)
         print(f'Step: {i}, action: {action_eval}')
 

@@ -105,7 +105,7 @@ class CartPoleEnv(gym.Env):
         assert self.action_space.contains(action), err_msg
 
         x, x_dot, theta, theta_dot = self.state
-        force = action
+        force = action[0]
         costheta = math.cos(theta)
         sintheta = math.sin(theta)
 
