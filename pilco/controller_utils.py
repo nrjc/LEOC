@@ -7,6 +7,8 @@ from pilco.controllers import LinearController
 
 class LQR:
     def get_W_matrix(self, A, B, C, env='swing up'):
+        # Compute gain matrix by solving Algebraic Riccati Equation
+        # Reference https: // www.mathworks.com / help / control / ref / lqr.html
         Q = np.dot(C.T, C)
         R = 1
         K, _, _ = control.lqr(A, B, Q, R)
@@ -14,7 +16,6 @@ class LQR:
         return np.array(K)
 
     def get_k_prime(self, K, env='swing up'):
-        # reference http://ctms.engin.umich.edu/CTMS/index.php?example=InvertedPendulum&section=ControlStateSpace#6
         assert (env == 'swing up' or env == 'cartpole'), "--- LQR.get_k_prime() error! ---"
 
         # Convert K to ndarray

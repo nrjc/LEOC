@@ -31,6 +31,7 @@ class myCartpole():
         self.env.state = np.random.uniform(low=0, high=0.01 * high)  # only difference
         if not up:
             self.env.state[2] += -np.pi
+        self.env.state[2] += -np.pi/6
         self.env.last_u = None
         return self.env._get_obs()
 
@@ -41,7 +42,8 @@ class myCartpole():
         self.env.close()
 
     def control(self):
-        # reference http://ctms.engin.umich.edu/CTMS/index.php?example=InvertedPendulum&section=SystemModeling
+        # Reference http://ctms.engin.umich.edu/CTMS/index.php?example=InvertedPendulum&section=SystemModeling
+        # Reference https://sharpneat.sourceforge.io/research/cart-pole/cart-pole-equations.html
         # M := mass of cart
         # m := mass of pole
         # l := length of pole from end to centre
@@ -54,14 +56,14 @@ class myCartpole():
         I = 1 / 3 * m * (l ** 2)
         p = I * (M + m) + M * m * (l ** 2)
 
-        # using x to approximate sin(x) and 1-x to approximate cos(x)
-        A = np.array([[0,                           1,                              0, 0],
-                      [0, -(I + m * (l ** 2) * b) / p,    (m ** 2) * g * (l ** 2) / p, 0],
-                      [0,                           0,                              0, 1],
-                      [0,            -(m * l * b) / p,        m * g * l * (M + m) / p, 0]])
+        # using x to approximate sin(x) and 1 to approximate cos(x)
+        A = np.array([[0,                           1,                            0, 0],
+                      [0, -(I + m * (l ** 2)) * b / p,  (m ** 2) * g * (l ** 2) / p, 0],
+                      [0,                           0,                            0, 1],
+                      [0,             (m * l * b) / p,      m * g * l * (M + m) / p, 0]])
 
         B = np.array([[0],
-                      [(I + m * (l ** 2)) / p],
+                      [-(I + m * (l ** 2)) / p],
                       [0],
                       [m * l / p]])
 
@@ -104,7 +106,7 @@ if __name__ == '__main__':
     control_dim = 1
     controller = LinearController(state_dim=state_dim, control_dim=control_dim, W=W_matrix, max_action=max_action)
     # controller = CombinedController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf,
-    #                                 controller_location=target, W=-W_matrix, max_action=max_action)
+    #                                 controller_location=target, W=W_matrix, max_action=max_action)
     # R = ExponentialReward(state_dim=state_dim, t=target, W=weights)
 
     if not test_linear_control:
@@ -132,7 +134,7 @@ if __name__ == '__main__':
 
     else:
         states = env.reset(up=test_linear_control)
-        for i in range(200):
+        for i in range(500):
             env.render()
             action = controller.compute_action(tf.reshape(tf.convert_to_tensor(states), (1, -1)),
                                                tf.zeros([state_dim, state_dim], dtype=tf.dtypes.float64),
