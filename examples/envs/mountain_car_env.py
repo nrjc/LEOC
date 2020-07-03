@@ -92,12 +92,12 @@ class Continuous_MountainCarEnv(gym.Env):
         return self.state, reward, done, {}
 
     def reset(self):
-        self.state = np.array([self.np_random.uniform(low=-np.pi/2-0.1, high=-np.pi/2+0.1), 0])
+        self.state = np.array([self.np_random.uniform(low=-np.pi-0.1, high=-np.pi+0.1), 0])
         return np.array(self.state)
 
     def _height(self, xs):
         # return np.sin(3 * xs)*.45+.55
-        return np.cos(xs) * .75 + 1.0
+        return np.cos(xs) * .75 + 2.0
 
     def render(self, mode='human'):
         screen_width = 600
@@ -156,7 +156,7 @@ class Continuous_MountainCarEnv(gym.Env):
         self.cartrans.set_translation(
             (pos-self.min_position) * scale, self._height(pos) * scale
         )
-        self.cartrans.set_rotation(math.cos(3 * pos))
+        self.cartrans.set_rotation(-math.sin(pos))
 
         return self.viewer.render(return_rgb_array=mode == 'rgb_array')
 
