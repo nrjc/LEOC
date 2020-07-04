@@ -44,10 +44,11 @@ if __name__ == '__main__':
 
     if test_linear_control:
         states = env.reset()
-        for i in range(100):
+        for i in range(600):
             env.render()
-            action = [1.0]
+            action = [0.0]
             states, _, _, _ = env.step(action)
-            print(f'Step: {i}, action: {action}')
+            y = env.env._height(states[0])
+            print(f'Step {i}: action={action}; x={states[0]:.2f}; y={y:.2f}; x_dot={states[1]:.4f}')
 
     env.close()
