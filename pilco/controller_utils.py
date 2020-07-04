@@ -16,8 +16,6 @@ class LQR:
         return np.array(K)
 
     def get_k_prime(self, K, env='swing up'):
-        assert (env == 'swing up' or env == 'cartpole'), "--- LQR.get_k_prime() error! ---"
-
         # Convert K to ndarray
         K = K.A
 
@@ -31,4 +29,12 @@ class LQR:
             # K := [x, x_dot, theta, theta_dot]
             # Cartpole env states = [x, x_dot, np.cos(theta), np.sin(theta), theta_dot]
             K_prime = [[K[0][0], K[0][1], 0, K[0][2], K[0][3]]]
+
+        elif env == 'mountain car':
+            # K := [position, velocity]
+            # Mountain car gym env states = [position, velocity]
+            K_prime = K
+
+        else:
+            raise Exception("--- LQR.get_k_prime() error with env! ---")
         return K_prime

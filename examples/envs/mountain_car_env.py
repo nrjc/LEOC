@@ -30,7 +30,7 @@ class Continuous_MountainCarEnv(gym.Env):
         self.x_scale = 1.0
         self.y_offset = 2.0
         self.y_scale = 1.0
-        self.starting_position = (-0.1 - self.x_offset) / self.x_scale
+        self.starting_position = (-np.pi - self.x_offset) / self.x_scale
         self.goal_position = (0.0 - self.x_offset) / self.x_scale
 
         self.gravity = 9.8
