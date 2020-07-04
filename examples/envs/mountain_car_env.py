@@ -75,9 +75,7 @@ class Continuous_MountainCarEnv(gym.Env):
         position, velocity = self.state
         force = action[0]
 
-        # acceleration = force / self.masscart - self.gravity * self._gradient(position) # force is taken to be horizontal force
-        grad = self._gradient(position)
-        acceleration = force / self.masscart - self.gravity * grad / (1+(grad**2)) # force is taken to be horizontal force
+        acceleration = force / self.masscart - self.gravity * self._gradient(position) # force taken to be horizontal
         velocity += self.tau * acceleration
         position += self.tau * velocity
 
@@ -179,7 +177,8 @@ class Continuous_MountainCarEnv(gym.Env):
         self.cartrans.set_translation(
             (pos-self.position_min) * scale, self._height(pos) * scale
         )
-        self.cartrans.set_rotation(self._gradient(pos))
+        rotation = np.arctan(self._gradient(pos))
+        self.cartrans.set_rotation(rotation)
 
         return self.viewer.render(return_rgb_array=mode == 'rgb_array')
 
