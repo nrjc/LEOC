@@ -125,6 +125,7 @@ if __name__ == '__main__':
             set_trainable(model.likelihood.variance, False)
         axis_values = np.zeros((N, state_dim))
         r_new = np.zeros((T, 1))
+
         for rollouts in range(N):
             print("**** ITERATION no", rollouts, " ****")
             pilco.optimize_models(maxiter=maxiter, restarts=2)
@@ -149,7 +150,7 @@ if __name__ == '__main__':
             intermediate_var = [x.diagonal() for x in intermediate_var]
             intermediate_mean = [x[0] for x in intermediate_mean]
             plot_single_rollout_cycle(intermediate_mean, intermediate_var, [X_new], None, None, state_dim,
-                                      control_dim, T, rollouts + 1)
+                                      control_dim, T, rollouts + 1, env='swing up')
 
             # Update dataset
             X = np.vstack((X, X_new))
