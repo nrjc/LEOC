@@ -6,9 +6,8 @@ import numpy as np
 
 def plot_single_rollout_cycle(state_mean: List[np.ndarray], state_var: List[np.ndarray],
                               rollout: List[List[np.ndarray]], rollout_actions: List[np.ndarray],
-                              all_rewards: List[np.ndarray],
-                              internal_state_dim_num: int, action_dim_num: int,
-                              time_steps: int, rollout_num: int):
+                              all_rewards: List[np.ndarray], internal_state_dim_num: int, action_dim_num: int,
+                              time_steps: int, rollout_num: int, env='swing up'):
     """
 
     Args:
@@ -21,6 +20,7 @@ def plot_single_rollout_cycle(state_mean: List[np.ndarray], state_var: List[np.n
         action_dim_num: size of action dimensions
         time_steps: time steps
         rollout_num: represents the number of rollouts
+        env: the experiment environment, string
     Returns:
         None
 
@@ -35,14 +35,23 @@ def plot_single_rollout_cycle(state_mean: List[np.ndarray], state_var: List[np.n
         "Error: States dimensions do not match!"
     if rollout_actions is not None:
         actions = np.array(rollout_actions)
-        assert actions.shape[1] == action_dim_num, "Error: Actions dimensions do not match!"
+        assert actions.shape[1] == action_dim_num, "--- Error: Actions dimensions do not match! ---"
     # if rollout_reward is not None:
     #     reward = np.array(rollout_reward)
 
-    states_subtitles = ['cos(theta)', 'sin(theta)', 'theta dot']
-    assert len(states_subtitles) == internal_state_dim_num, "Error: Change states_subtitles!"
-    actions_subtitles = ['torque']
-    assert len(actions_subtitles) == action_dim_num, "Error: Change actions_subtitles!"
+    if env == 'swing up':
+        states_subtitles = ['cos(theta)', 'sin(theta)', 'theta dot']
+        actions_subtitles = ['torque']
+    elif env == 'cartpole':
+        states_subtitles = ['x', 'x_dot', 'cos(theta)', 'sin(theta)', 'theta dot']
+        actions_subtitles = ['force']
+    elif env == 'mountain car':
+        states_subtitles = ['x', 'x_dot']
+        actions_subtitles = ['force']
+    else:
+        raise Exception('--- Error: plot_single_rollout_cycle env input incorrect! ---')
+    assert len(states_subtitles) == internal_state_dim_num, "--- Error: Change states_subtitles! ---"
+    assert len(actions_subtitles) == action_dim_num, "--- Error: Change actions_subtitles! ---"
 
     # Calculate reward.
     fig, axs = plt.subplots(math.ceil(total_graphs / width), width)
