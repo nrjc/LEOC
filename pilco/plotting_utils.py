@@ -2,6 +2,7 @@ import math
 from typing import List
 from matplotlib import pyplot as plt
 import numpy as np
+from gym import logger
 
 
 def plot_single_rollout_cycle(state_mean: List[np.ndarray], state_var: List[np.ndarray],
@@ -32,7 +33,7 @@ def plot_single_rollout_cycle(state_mean: List[np.ndarray], state_var: List[np.n
     var_states = np.array(state_var)
     rollouts = np.array(rollout)
     assert mean_states.shape[1] == internal_state_dim_num and var_states.shape[1] == internal_state_dim_num, \
-        "Error: States dimensions do not match!"
+        "--- Error: States dimensions do not match! ---"
     if rollout_actions is not None:
         actions = np.array(rollout_actions)
         assert actions.shape[1] == action_dim_num, "--- Error: Actions dimensions do not match! ---"
@@ -49,7 +50,7 @@ def plot_single_rollout_cycle(state_mean: List[np.ndarray], state_var: List[np.n
         states_subtitles = ['x', 'x_dot']
         actions_subtitles = ['force']
     else:
-        raise Exception('--- Error: plot_single_rollout_cycle env input incorrect! ---')
+        logger.error("--- Error: plot_single_rollout_cycle() env incorrect! ---")
     assert len(states_subtitles) == internal_state_dim_num, "--- Error: Change states_subtitles! ---"
     assert len(actions_subtitles) == action_dim_num, "--- Error: Change actions_subtitles! ---"
 

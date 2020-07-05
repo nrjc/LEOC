@@ -1,14 +1,11 @@
-import gpflow
 import numpy as np
 import control
-
-from pilco.controllers import LinearController
-
+from gym import logger
 
 class LQR:
     def get_W_matrix(self, A, B, C, env='swing up'):
         # Compute gain matrix by solving Algebraic Riccati Equation
-        # Reference https: // www.mathworks.com / help / control / ref / lqr.html
+        # Reference https://www.mathworks.com/help/control/ref/lqr.html
         Q = np.dot(C.T, C)
         R = 1
         K, _, _ = control.lqr(A, B, Q, R)
@@ -36,5 +33,5 @@ class LQR:
             K_prime = K
 
         else:
-            raise Exception("--- LQR.get_k_prime() error with env! ---")
+            logger.error("--- Error: LQR.get_k_prime() env incorrect! ---")
         return K_prime
