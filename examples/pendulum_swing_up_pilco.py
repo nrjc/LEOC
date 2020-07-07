@@ -91,7 +91,6 @@ if __name__ == '__main__':
     m_init = np.reshape([-1.0, 0, 0.0], (1, 3))
     S_init = np.diag([0.01, 0.05, 0.01])
     T = 40
-    T_sim = T
     J = 4
     N = 8
     restarts = 2
@@ -132,7 +131,7 @@ if __name__ == '__main__':
             pilco.optimize_policy(maxiter=maxiter, restarts=2)
             s_val = pilco.get_controller().get_S()
             axis_values[rollouts, :] = s_val.numpy()
-            X_new, Y_new, _, _ = rollout(env, pilco, timesteps=T_sim, verbose=False, SUBS=SUBS, render=True)
+            X_new, Y_new, _, _ = rollout(env, pilco, timesteps=T, verbose=False, SUBS=SUBS, render=True)
 
             # Since we had decide on the various parameters of the reward function
             # we might want to verify that it behaves as expected by inspection

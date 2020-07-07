@@ -62,19 +62,26 @@ def plot_single_rollout_cycle(state_mean: List[np.ndarray], state_var: List[np.n
         plot_actions = i >= internal_state_dim_num and i < (total_graphs - 1) and rollout_actions is not None
         plot_reward = i == total_graphs - 1 and all_rewards is not None
         cur_axis = axs[cur_graph_pos_i, cur_graph_pos_j]
+
+        # Plotting the state variables across time
         if plot_states:
             y = mean_states[:, i]
             yerr = var_states[:, i]
             cur_axis.errorbar(np.arange(time_steps), y, yerr)
             # for s in range(rollout_num):
             #     cur_axis.plot(np.arange(time_steps), rollouts[s, :, i])
-            cur_axis.plot(np.arange(time_steps), rollouts[0, :, i])
+            early_termination_time_steps = rollouts.shape[1]
+            cur_axis.plot(np.arange(early_termination_time_steps), rollouts[0, :, i])
             cur_axis.set_title(f'State: {states_subtitles[i]}')
+
+        # Plotting the actions across time,
         if plot_actions:
             # Plot one of the M subplots for actions
             j = i - internal_state_dim_num
             cur_axis.plot(np.arange(time_steps), actions[:, j])
             cur_axis.set_title(f'Action: {actions_subtitles[j]}')
+
+        # Plotting the rewards across time
         if plot_reward:
             cur_axis.plot(np.arange(rollout_num), all_rewards)
             cur_axis.set_title(f'Reward')
