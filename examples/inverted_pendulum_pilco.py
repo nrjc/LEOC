@@ -14,7 +14,7 @@ from gpflow import set_trainable
 np.random.seed(0)
 
 
-class myPendulum():
+class myCartPole():
     def __init__(self):
         self.env = gym.make('InvertedPendulum-v2').env
         self.action_space = self.env.action_space
@@ -45,10 +45,10 @@ class myPendulum():
         b = 0
         M = self.env.sim.model.body_mass[cart_id]
         m = self.env.sim.model.body_mass[pole_id]
-        l = self.env.length
-        g = self.env.gravity
+        l = self.env.sim.model.body_ipos[pole_id][2]
+        g = 9.81
         I = 1 / 12 * m * (l ** 2)
-        p = I * (M + m) + M * m * (r ** 2)
+        p = I * (M + m) + M * m * (l ** 2)
 
         # using x to approximate sin(x) and 1-x to approximate cos(x)
         A = np.array([[0,                           1,                              0, 0],
@@ -57,7 +57,7 @@ class myPendulum():
                       [0,            -(m * l * b) / p,        m * g * l * (M + m) / p, 0]])
 
         B = np.array([[0],
-                      [(I + m * l ** 2) / p],
+                      [(I + m * (l ** 2)) / p],
                       [0],
                       [m * l / p]])
 
@@ -86,17 +86,16 @@ if __name__ == '__main__':
     N = 8
     restarts = 2
 
-    env = myPendulum()
+    env = myCartPole()
     A, B, C = env.control()
-    W_matrix = LQR().get_W_matrix(A, B, C, env='inverted')
+    W_matrix = LQR().get_W_matrix(A, B, C, env='cartpole')
 
     # Set up objects and variables
-    state_dim = 4
-    control_dim = 1
-    controller = LinearController(state_dim=state_dim, control_dim=control_dim, W=-W_matrix, max_action=1.0)
+    state_dim = env.observation_space.shape[0]
+    control_dim = env.action_space.shape[0]
+    controller = LinearController(state_dim=state_dim, control_dim=control_dim, W=-W_matrix, max_action=10.0)
     # controller = CombinedController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf,
-    #                                 controller_location=target,
-    #                                 W=-W_matrix, max_action=2.0)
+    #                                 controller_location=target, W=-W_matrix, max_action=2.0)
     R = ExponentialReward(state_dim=state_dim, t=target, W=weights)
 
     # Initial random rollouts to generate a dataset
