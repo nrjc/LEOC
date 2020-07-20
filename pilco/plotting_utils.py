@@ -2,6 +2,7 @@ import math
 from typing import List
 from matplotlib import pyplot as plt
 import numpy as np
+import seaborn as sns
 from gym import logger
 
 
@@ -86,3 +87,35 @@ def plot_single_rollout_cycle(state_mean: List[np.ndarray], state_var: List[np.n
             cur_axis.plot(np.arange(rollout_num), all_rewards)
             cur_axis.set_title(f'Reward')
     fig.show()
+
+
+def plot_interaction_barchart(y_extended, y_pilco):
+    # width of the bars
+    barWidth = 0.2
+
+    # The x position of bars
+    r1 = np.arange(len(y_pilco))
+    r2 = [x + barWidth for x in r1]
+
+    plt.style.use('seaborn-darkgrid')
+
+    # Create the bars
+    plt.bar(r1, y_pilco, width=barWidth, color='royalblue', capsize=15, label='PILCO')
+    plt.bar(r2, y_extended, width=barWidth, color='orange', capsize=15, label='Extended RBF controller')
+
+    # general layout
+    plt.xticks([r + barWidth/2 for r in range(len(y_extended))], ['Swing-up pendulum', 'Cartpole', 'Mountain car'])
+    plt.ylabel('Interaction time')
+    plt.legend()
+
+    # Show graphic
+    plt.show()
+
+
+if __name__ == '__main__':
+
+    # Choose the height of the bars
+    y_extended = [30, 9.6, 30]
+    y_pilco = [30, 17.5, 30]
+
+    plot_interaction_barchart(y_extended, y_pilco)
