@@ -36,7 +36,7 @@ class myPendulum():
     def reset(self, up=False):
         high = np.array([np.pi, 1])
         self.env.state = np.random.uniform(low=-high, high=high)
-        self.env.state = np.random.uniform(low=0, high=0.01 * high)  # only difference
+        self.env.state = np.random.uniform(low=0, high=0.1 * high)  # only difference
         if not up:
             self.env.state[0] += -np.pi
         self.env.last_u = None
@@ -81,7 +81,7 @@ class myPendulum():
 
 if __name__ == '__main__':
     # Define params
-    test_linear_control = True
+    test_linear_control = False
     SUBS = 3
     bf = 60
     maxiter = 50
@@ -161,7 +161,7 @@ if __name__ == '__main__':
         states = env.reset(up=test_linear_control)
         for i in range(100):
             env.render()
-            action = controller_linear.compute_action(tf.reshape(tf.convert_to_tensor(states), (1, -1)),
+            action = controller.compute_action(tf.reshape(tf.convert_to_tensor(states), (1, -1)),
                                                tf.zeros([state_dim, state_dim], dtype=tf.dtypes.float64),
                                                squash=False)[0]
             action = action[0, :].numpy()  # + random.normalvariate(0, 0.1)

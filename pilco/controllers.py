@@ -141,6 +141,15 @@ class RbfController(MGPR):
             sigma = 0.1
             m.kernel.lengthscales.assign(mean + sigma * np.random.normal(size=m.kernel.lengthscales.shape))
 
+    def linearize(self, loc):
+        for m in self.models:
+            m.X.assign(np.random.normal(size=m.data[0].shape))
+            m.Y.assign(self.max_action / 10 * np.random.normal(size=m.data[1].shape))
+            mean = 1;
+            sigma = 0.1
+            m.kernel.lengthscales.assign(mean + sigma * np.random.normal(size=m.kernel.lengthscales.shape))
+        return
+
 
 class CombinedController(gpflow.Module):
     '''
@@ -157,9 +166,8 @@ class CombinedController(gpflow.Module):
         self.rbc_controller = RbfController(state_dim, control_dim, num_basis_functions, max_action)
         self.linear_controller = LinearController(state_dim, control_dim, max_action, W=W)
         self.a = Parameter(controller_location, trainable=False)
-        self.S = Parameter(0.05 * np.ones((state_dim), float_type),
+        self.S = Parameter(1 * np.ones((state_dim), float_type),
                            transform=positive())
-        self.zeta = Parameter(0.1, transform=positive(), trainable=False)
         self.max_action = max_action
 
     def compute_ratio(self, x):
@@ -167,8 +175,8 @@ class CombinedController(gpflow.Module):
         Compute the ratio of the linear controller
         '''
         d = (x - self.a.read_value()) @ tf.linalg.diag(self.S.read_value()) @ tf.transpose(x - self.a.read_value())
-        ratio = 1 / (tf.pow(d, 2 * self.zeta.read_value()) + 1)
-        return ratio
+        ratio = 1 / (d + 1)
+        return 1 - ratio
 
     def compute_action(self, m, s, squash=True):
         '''
