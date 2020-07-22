@@ -157,7 +157,7 @@ class CombinedController(gpflow.Module):
         self.rbc_controller = RbfController(state_dim, control_dim, num_basis_functions, max_action)
         self.linear_controller = LinearController(state_dim, control_dim, max_action, W=W)
         self.a = Parameter(controller_location, trainable=False)
-        self.S = Parameter(0.05*np.ones((state_dim), float_type),
+        self.S = Parameter(0.05 * np.ones((state_dim), float_type),
                            transform=positive())
         self.zeta = Parameter(0.1, transform=positive(), trainable=False)
         self.max_action = max_action
@@ -166,8 +166,8 @@ class CombinedController(gpflow.Module):
         '''
         Compute the ratio of the linear controller
         '''
-        r = (x - self.a.read_value()) @ tf.linalg.diag(self.S.read_value()) @ tf.transpose(x - self.a.read_value())
-        ratio = -1 / math.pi * tf.math.atan2(- r * self.zeta.read_value(), (1 - tf.math.pow(r, 2)))
+        d = (x - self.a.read_value()) @ tf.linalg.diag(self.S.read_value()) @ tf.transpose(x - self.a.read_value())
+        ratio = 1 / (tf.pow(d, 2 * self.zeta.read_value()) + 1)
         return ratio
 
     def compute_action(self, m, s, squash=True):
