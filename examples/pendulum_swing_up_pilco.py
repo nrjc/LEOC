@@ -104,8 +104,10 @@ if __name__ == '__main__':
     state_dim = 3
     control_dim = 1
     # controller_linear = LinearController(state_dim=state_dim, control_dim=control_dim, W=W_matrix, max_action=1)
-    controller = CombinedController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf,
-                                    controller_location=target, W=W_matrix, max_action=1.0)
+    controller = RbfController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf,
+                               max_action=1.0)
+    # controller = CombinedController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf,
+    #                                 controller_location=target, W=W_matrix, max_action=1.0)
     R = ExponentialReward(state_dim=state_dim, t=target, W=weights)
     # c_param = L2HarmonicPenalization([controller.get_S()], 0.0001)
     # R = CombinedRewards(state_dim, [R, c_param])
@@ -136,8 +138,8 @@ if __name__ == '__main__':
             print("**** ITERATION no", rollouts, " ****")
             pilco.optimize_models(maxiter=maxiter, restarts=2)
             pilco.optimize_policy(maxiter=maxiter, restarts=2)
-            s_val = pilco.get_controller().get_S()
-            axis_values[rollouts, :] = s_val.numpy()
+            s_val = pilco.get_controller()
+            # axis_values[rollouts, :] = s_val.numpy()
             X_new, Y_new, _, _ = rollout(env, pilco, timesteps=T, verbose=False, SUBS=SUBS, render=True)
 
             # Since we had decide on the various parameters of the reward function
@@ -148,8 +150,8 @@ if __name__ == '__main__':
             _, _, r, intermediary_dict = pilco.predict_and_obtain_intermediates(X_new[0, None, :-1], 0.001 * S_init, T)
             print("Total ", total_r, " Predicted: ", r)
             plt.figure(3)
-            for c_dim in range(state_dim):
-                plt.plot(axis_values[:rollouts, c_dim])
+            # for c_dim in range(state_dim):
+            #     plt.plot(axis_values[:rollouts, c_dim])
             plt.pause(0.01)
             # Plotting internal states of pilco variables
             intermediate_mean, intermediate_var, intermediate_reward = zip(*intermediary_dict)
@@ -171,7 +173,7 @@ if __name__ == '__main__':
             action = controller.compute_action(tf.reshape(tf.convert_to_tensor(states), (1, -1)),
                                                tf.zeros([state_dim, state_dim], dtype=tf.dtypes.float64),
                                                squash=True)[0]
-            action = action[0, :].numpy()  + random.normalvariate(0, 0.1)
+            action = action[0, :].numpy() + random.normalvariate(0, 0.1)
             states, _, _, _ = env.step(action)
             print(f'Step: {i}, action: {action}')
 
