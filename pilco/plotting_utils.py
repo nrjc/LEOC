@@ -55,8 +55,11 @@ def plot_single_rollout_cycle(state_mean: List[np.ndarray], state_var: List[np.n
     assert len(states_subtitles) == internal_state_dim_num, "--- Error: Change states_subtitles! ---"
     assert len(actions_subtitles) == action_dim_num, "--- Error: Change actions_subtitles! ---"
 
+    plt.style.use('seaborn-darkgrid')
+
     # Calculate reward.
-    fig, axs = plt.subplots(math.ceil(total_graphs / width), width)
+    fig, axs = plt.subplots(math.ceil(total_graphs / width), width, constrained_layout=True)
+    fig.suptitle(f'Rollout {rollout_num}', fontsize=16)
     for i in range(total_graphs):
         cur_graph_pos_i, cur_graph_pos_j = i // width, i % width
         plot_states = i < internal_state_dim_num
@@ -69,8 +72,6 @@ def plot_single_rollout_cycle(state_mean: List[np.ndarray], state_var: List[np.n
             y = mean_states[:, i]
             yerr = var_states[:, i]
             cur_axis.errorbar(np.arange(time_steps), y, yerr)
-            # for s in range(rollout_num):
-            #     cur_axis.plot(np.arange(time_steps), rollouts[s, :, i])
             early_termination_time_steps = rollouts.shape[1]
             cur_axis.plot(np.arange(early_termination_time_steps), rollouts[0, :, i])
             cur_axis.set_title(f'State: {states_subtitles[i]}')
