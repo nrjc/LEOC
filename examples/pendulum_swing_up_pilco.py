@@ -3,7 +3,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 import numpy as np
 import gym
-
+import random
 from pilco.controller_utils import LQR
 from pilco.models import PILCO
 from pilco.controllers import RbfController, LinearController, CombinedController
@@ -25,19 +25,20 @@ np.random.seed(0)
 # Uses restarts
 
 class myPendulum():
-    def __init__(self):
+    def __init__(self, initialize_top=False):
         self.env = gym.make('Pendulum-v0').env
         self.action_space = self.env.action_space
         self.observation_space = self.env.observation_space
+        self.up = initialize_top
 
     def step(self, action):
         return self.env.step(action)
 
-    def reset(self, up=False):
+    def reset(self):
         high = np.array([np.pi, 1])
         self.env.state = np.random.uniform(low=-high, high=high)
         self.env.state = np.random.uniform(low=0, high=0.1 * high)  # only difference
-        if not up:
+        if not self.up:
             self.env.state[0] += -np.pi
         self.env.last_u = None
         return self.env._get_obs()
@@ -91,20 +92,20 @@ if __name__ == '__main__':
     m_init = np.reshape([-1.0, 0, 0.0], (1, 3))
     S_init = np.diag([0.01, 0.05, 0.01])
     T = 40
-    J = 4
+    J = 2
     N = 8
     restarts = 2
 
     # Set up objects and variables
-    env = myPendulum()
+    env = myPendulum(True)
     A, B, C = env.control()
     W_matrix = LQR().get_W_matrix(A, B, C, env='swing up')
 
     state_dim = 3
     control_dim = 1
-    controller_linear = LinearController(state_dim=state_dim, control_dim=control_dim, W=W_matrix, max_action=1)
+    # controller_linear = LinearController(state_dim=state_dim, control_dim=control_dim, W=W_matrix, max_action=1)
     controller = CombinedController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf,
-                                    controller_location=target, W=W_matrix, max_action=2.0)
+                                    controller_location=target, W=W_matrix, max_action=1.0)
     R = ExponentialReward(state_dim=state_dim, t=target, W=weights)
     # c_param = L2HarmonicPenalization([controller.get_S()], 0.0001)
     # R = CombinedRewards(state_dim, [R, c_param])
@@ -112,8 +113,14 @@ if __name__ == '__main__':
     if not test_linear_control:
         # Initial random rollouts to generate a dataset
         X, Y, _, _ = rollout(env, None, timesteps=T, random=True, SUBS=SUBS, render=True, verbose=False)
+        pilco = PILCO((X, Y), controller=controller, horizon=T, reward=R, m_init=m_init, S_init=S_init)
         for i in range(1, J):
-            X_, Y_, _, _ = rollout(env, None, timesteps=T, random=True, SUBS=SUBS, render=True, verbose=False)
+            X_, Y_, _, _ = rollout(env, pilco, timesteps=T, random=False, SUBS=SUBS, render=True, verbose=False)
+            X = np.vstack((X, X_))
+            Y = np.vstack((Y, Y_))
+        env = myPendulum(False)
+        for i in range(1, J):
+            X_, Y_, _, _ = rollout(env, pilco, timesteps=T, random=True, SUBS=SUBS, render=True, verbose=False)
             X = np.vstack((X, X_))
             Y = np.vstack((Y, Y_))
         pilco = PILCO((X, Y), controller=controller, horizon=T, reward=R, m_init=m_init, S_init=S_init)
@@ -158,13 +165,13 @@ if __name__ == '__main__':
         plt.show()
 
     else:
-        states = env.reset(up=test_linear_control)
+        states = env.reset()
         for i in range(100):
             env.render()
             action = controller.compute_action(tf.reshape(tf.convert_to_tensor(states), (1, -1)),
                                                tf.zeros([state_dim, state_dim], dtype=tf.dtypes.float64),
-                                               squash=False)[0]
-            action = action[0, :].numpy()  # + random.normalvariate(0, 0.1)
+                                               squash=True)[0]
+            action = action[0, :].numpy()  + random.normalvariate(0, 0.1)
             states, _, _, _ = env.step(action)
             print(f'Step: {i}, action: {action}')
 

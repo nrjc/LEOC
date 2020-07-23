@@ -175,7 +175,7 @@ class CombinedController(gpflow.Module):
         Compute the ratio of the linear controller
         '''
         d = (x - self.a.read_value()) @ tf.linalg.diag(self.S.read_value()) @ tf.transpose(x - self.a.read_value())
-        ratio = 1 / (d + 1)
+        ratio = 1 / tf.pow(d + 1, 2)
         return 1 - ratio
 
     def compute_action(self, m, s, squash=True):
