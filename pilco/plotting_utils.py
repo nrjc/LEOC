@@ -71,12 +71,13 @@ def plot_single_rollout_cycle(state_mean: List[np.ndarray], state_var: List[np.n
         if plot_states:
             y = mean_states[:, i]
             yerr = var_states[:, i]
-            cur_axis.errorbar(np.arange(time_steps), y, yerr)
+            cur_axis.plot(np.arange(time_steps), y, color='royalblue')
+            cur_axis.fill_between(np.arange(time_steps), y-yerr, y+yerr, alpha=0.5, facecolor='royalblue')
             early_termination_time_steps = rollouts.shape[1]
-            cur_axis.plot(np.arange(early_termination_time_steps), rollouts[0, :, i])
+            cur_axis.plot(np.arange(early_termination_time_steps), rollouts[0, :, i], color='darkorange')
             cur_axis.set_title(f'State: {states_subtitles[i]}')
 
-        # Plotting the actions across time,
+        # Plotting the actions across time
         if plot_actions:
             # Plot one of the M subplots for actions
             j = i - internal_state_dim_num
@@ -85,7 +86,7 @@ def plot_single_rollout_cycle(state_mean: List[np.ndarray], state_var: List[np.n
 
         # Plotting the rewards across time
         if plot_reward:
-            cur_axis.plot(np.arange(rollout_num), all_rewards)
+            cur_axis.plot(np.arange(rollout_num + 1), all_rewards)
             cur_axis.set_title(f'Reward')
     fig.show()
 

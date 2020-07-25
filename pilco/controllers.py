@@ -69,8 +69,8 @@ class LinearController(gpflow.Module):
     def randomize(self):
         mean = 0;
         sigma = 1
-        # self.W.assign(mean + sigma * np.random.normal(size=self.W.shape))
-        # self.b.assign(mean + sigma * np.random.normal(size=self.b.shape))
+        self.W.assign(mean + sigma * np.random.normal(size=self.W.shape))
+        self.b.assign(mean + sigma * np.random.normal(size=self.b.shape))
 
 
 class FakeGPR(gpflow.Module):
@@ -141,6 +141,15 @@ class RbfController(MGPR):
             sigma = 0.1
             m.kernel.lengthscales.assign(mean + sigma * np.random.normal(size=m.kernel.lengthscales.shape))
 
+    def linearize(self, loc):
+        for m in self.models:
+            m.X.assign(np.random.normal(size=m.data[0].shape))
+            m.Y.assign(self.max_action / 10 * np.random.normal(size=m.data[1].shape))
+            mean = 1;
+            sigma = 0.1
+            m.kernel.lengthscales.assign(mean + sigma * np.random.normal(size=m.kernel.lengthscales.shape))
+        return
+
 
 class CombinedController(gpflow.Module):
     '''
@@ -154,20 +163,23 @@ class CombinedController(gpflow.Module):
         gpflow.Module.__init__(self)
         if controller_location is None:
             controller_location = np.zeros((1, state_dim), float_type)
-        self.rbc_controller = RbfController(state_dim, control_dim, num_basis_functions, max_action)
+        self.rbf_controller = RbfController(state_dim, control_dim, num_basis_functions, max_action)
         self.linear_controller = LinearController(state_dim, control_dim, max_action, W=W)
         self.a = Parameter(controller_location, trainable=False)
-        self.S = Parameter(0.05 * np.ones((state_dim), float_type),
-                           transform=positive())
-        self.zeta = Parameter(0.1, transform=positive(), trainable=False)
+        self.S = Parameter(np.ones((state_dim), float_type), trainable=True, transform=positive())
         self.max_action = max_action
 
     def compute_ratio(self, x):
         '''
         Compute the ratio of the linear controller
         '''
-        d = (x - self.a.read_value()) @ tf.linalg.diag(self.S.read_value()) @ tf.transpose(x - self.a.read_value())
-        ratio = 1 / (tf.pow(d, 2 * self.zeta.read_value()) + 1)
+        S = self.S.read_value()
+        a = self.a.read_value()
+        # S = tf.constant([1.0, 2.0, 0.0])
+        # d = (x - a) @ tf.linalg.inv(tf.linalg.diag(S)) @ tf.transpose(x - a)
+        d = (x - a) @ tf.linalg.diag(S) @ tf.transpose(x - a)
+        # ratio = 1 / tf.pow(d + 1, 2)
+        ratio = 1 / (d + 1)
         return ratio
 
     def compute_action(self, m, s, squash=True):
@@ -178,23 +190,20 @@ class CombinedController(gpflow.Module):
         '''
         r = self.compute_ratio(m)
         M1, S1, V1 = self.linear_controller.compute_action(m, s, False)
-        M2, S2, V2 = self.rbc_controller.compute_action(m, s, False)
-        M = (1 - r) * M1 + r * M2
-        S = (1 - r) * S1 + r * S2 + (1 - r) * (M1 - M) @ tf.transpose(M1 - M) + r * (M2 - M) @ tf.transpose(M2 - M)
-        V = (1 - r) * V1 + r * V2
+        M2, S2, V2 = self.rbf_controller.compute_action(m, s, False)
+        M = r * M1 + (1 - r) * M2
+        S = r * S1 + (1 - r) * S2 + r * (M1 - M) @ tf.transpose(M1 - M) + (1 - r) * (M2 - M) @ tf.transpose(M2 - M)
+        V = r * V1 + (1 - r) * V2
         if squash:
             M, S, V2 = squash_sin(M, S, self.max_action)
             V = V @ V2
         return M, S, V
 
     def randomize(self):
-        self.rbc_controller.randomize()
-        self.linear_controller.randomize()
-        mean = 0;
-        sigma = 1
-        self.S.assign(mean + sigma * np.absolute(np.random.normal(size=self.S.shape)))
-
-        # self.b.assign(mean + sigma * np.random.normal(size=self.b.shape))
+        self.rbf_controller.randomize()
+        # mean = 0
+        # sigma = 1
+        # self.S.assign(mean + sigma * np.absolute(np.random.normal(size=self.S.shape)))
 
     def get_S(self):
         return self.S

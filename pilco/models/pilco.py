@@ -108,6 +108,7 @@ class PILCO(gpflow.models.BayesianModel):
             self.controller.randomize()
             start = time.time()
             self.optimizer.minimize(self.training_loss, self.trainable_variables, options=dict(maxiter=maxiter))
+            # self.optimizer.minimize(self.training_loss, self.trainable_variables)
             end = time.time()
             reward = self.compute_reward()
             print("Controller's optimization: done in %.1f seconds with reward=%.3f." % (

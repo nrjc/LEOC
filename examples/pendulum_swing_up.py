@@ -3,7 +3,6 @@ import logging
 logging.basicConfig(level=logging.INFO)
 import numpy as np
 import gym
-import collections
 from matplotlib import pyplot as plt
 from gpflow import set_trainable
 
@@ -65,9 +64,9 @@ if __name__ == '__main__':
     env = myPendulum()
 
     # Initial random rollouts to generate a dataset
-    X, Y, _, _ = rollout(env, None, timesteps=T, random=True, SUBS=SUBS)
+    X, Y, _, _ = rollout(env, None, timesteps=T, random=True, SUBS=SUBS, verbose=False)
     for i in range(1, J):
-        X_, Y_, _, _ = rollout(env, None, timesteps=T, random=True, SUBS=SUBS, verbose=True)
+        X_, Y_, _, _ = rollout(env, None, timesteps=T, random=True, SUBS=SUBS, verbose=False)
         X = np.vstack((X, X_))
         Y = np.vstack((Y, Y_))
 
@@ -87,15 +86,14 @@ if __name__ == '__main__':
 
     axis_values = np.zeros((N, state_dim))
     r_new = np.zeros((T, 1))
-    all_rewards = collections.deque()
+    all_rewards = []
 
     for rollouts in range(N):
         print("**** ITERATION no", rollouts, " ****")
-        pilco.optimize_models(maxiter=maxiter, restarts=2)
-        pilco.optimize_policy(maxiter=maxiter, restarts=2)
-        # s_val = pilco.get_controller().get_S()
-        # axis_values[rollouts, :] = s_val.numpy()
-        X_new, Y_new, _, _ = rollout(env, pilco, timesteps=T_sim, verbose=True, SUBS=SUBS)
+        policy_restarts = 1 if rollouts > 2 else 2
+        pilco.optimize_models(maxiter=maxiter, restarts=restarts)
+        pilco.optimize_policy(maxiter=maxiter, restarts=policy_restarts)
+        X_new, Y_new, _, _ = rollout(env, pilco, timesteps=T_sim, verbose=False, SUBS=SUBS)
 
         # Since we had decide on the various parameters of the reward function
         # we might want to verify that it behaves as expected by inspection
@@ -114,7 +112,7 @@ if __name__ == '__main__':
         rollout_reward = np.array(rollout_reward)
         all_rewards.append(rollout_reward[0])
         plot_single_rollout_cycle(intermediate_mean, intermediate_var, [X_new], None, all_rewards, state_dim,
-                                  control_dim, T, rollouts + 1)
+                                  control_dim, T, rollouts, env='swing up')
 
         # Update dataset
         X = np.vstack((X, X_new))
