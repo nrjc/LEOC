@@ -35,11 +35,10 @@ class myPendulum():
         return self.env.step(action)
 
     def reset(self):
-        high = np.array([np.pi, 1])
-        self.env.state = np.random.uniform(low=-high, high=high)
-        self.env.state = np.random.uniform(low=0, high=0.01 * high)  # only difference
-        if not self.up:
-            self.env.state[0] += -np.pi
+        if self.up:
+            self.env.state = [np.pi/4, 1]
+        else:
+            self.env.state = [np.pi, 0]
         self.env.last_u = None
         return self.env._get_obs()
 

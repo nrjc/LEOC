@@ -7,6 +7,8 @@ class LQR:
         # Compute gain matrix by solving Algebraic Riccati Equation
         # Reference https://www.mathworks.com/help/control/ref/lqr.html
         Q = np.dot(C.T, C)
+        if env == 'swing up':
+            Q = np.diag([2.0, 1.0])
         R = 1
         K, _, _ = control.lqr(A, B, Q, R)
         K = self.get_k_prime(K, env)
