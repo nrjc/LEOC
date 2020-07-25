@@ -1,21 +1,20 @@
-import logging
-
-logging.basicConfig(level=logging.INFO)
 import numpy as np
 import gym
 import random
-from pilco.controller_utils import LQR
+import tensorflow as tf
+from gpflow import set_trainable
+from matplotlib import pyplot as plt
+import logging
+logging.basicConfig(level=logging.INFO)
+
 from pilco.models import PILCO
 from pilco.controllers import RbfController, LinearController, CombinedController
+from pilco.controller_utils import LQR
 from pilco.plotting_utils import plot_single_rollout_cycle
 from pilco.rewards import ExponentialReward, L2HarmonicPenalization, CombinedRewards
-import tensorflow as tf
 from utils import rollout, policy
-from matplotlib import pyplot as plt
-from gpflow import set_trainable
 
 np.random.seed(0)
-
 
 # NEEDS a different initialisation than the one in gym (change the reset() method),
 # to (m_init, S_init), modifying the gym env
@@ -23,6 +22,7 @@ np.random.seed(0)
 # Introduces subsampling with the parameter SUBS and modified rollout function
 # Introduces priors for better conditioning of the GP model
 # Uses restarts
+
 
 class myPendulum():
     def __init__(self, initialize_top=False):
@@ -95,22 +95,24 @@ if __name__ == '__main__':
 
     state_dim = 3
     control_dim = 1
+
     controller_linear = LinearController(state_dim=state_dim, control_dim=control_dim, W=W_matrix, max_action=max_action)
-    controller = RbfController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf, max_action=max_action)
-    # controller = CombinedController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf,
-    #                                 controller_location=target, W=W_matrix, max_action=max_action)
+    # controller = RbfController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf, max_action=max_action)
+    controller = CombinedController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf,
+                                    controller_location=target, W=W_matrix, max_action=max_action)
     R = ExponentialReward(state_dim=state_dim, t=target, W=weights)
 
     if not test_linear_control:
         # Initial random rollouts to generate a dataset
-        X, Y, _, _ = rollout(env, None, timesteps=T, random=True, SUBS=SUBS, render=False, verbose=False)
+        X, Y, _, _ = rollout(env, None, timesteps=T, random=True, SUBS=SUBS, verbose=False)
         for i in range(1, J):
-            X_, Y_, _, _ = rollout(env, None, timesteps=T, random=True, SUBS=SUBS, render=False, verbose=False)
+            X_, Y_, _, _ = rollout(env, None, timesteps=T, random=True, SUBS=SUBS, verbose=False)
             X = np.vstack((X, X_))
             Y = np.vstack((Y, Y_))
+
         pilco = PILCO((X, Y), controller=controller, horizon=T, reward=R, m_init=m_init, S_init=S_init)
 
-        # for numerical stability, we can set the likelihood variance parameters of the GP models
+        # for numerical stability
         for model in pilco.mgpr.models:
             model.likelihood.variance.assign(0.001)
             set_trainable(model.likelihood.variance, False)
@@ -123,7 +125,6 @@ if __name__ == '__main__':
             policy_restarts = 1 if rollouts > 3 else 2
             pilco.optimize_models(maxiter=maxiter, restarts=restarts)
             pilco.optimize_policy(maxiter=maxiter, restarts=policy_restarts)
-            s_val = pilco.get_controller()
             X_new, Y_new, _, _ = rollout(env, pilco, timesteps=T, verbose=False, SUBS=SUBS)
 
             # Since we had decide on the various parameters of the reward function
@@ -157,8 +158,8 @@ if __name__ == '__main__':
         for i in range(100):
             env.render()
             action = controller_linear.compute_action(tf.reshape(tf.convert_to_tensor(states), (1, -1)),
-                                               tf.zeros([state_dim, state_dim], dtype=tf.dtypes.float64),
-                                               squash=True)[0]
+                                                      tf.zeros([state_dim, state_dim], dtype=tf.dtypes.float64),
+                                                      squash=True)[0]
             action = action[0, :].numpy()
             states, _, _, _ = env.step(action)
             print(f'Step: {i}, action: {action}')
