@@ -69,8 +69,8 @@ class LinearController(gpflow.Module):
     def randomize(self):
         mean = 0;
         sigma = 1
-        # self.W.assign(mean + sigma * np.random.normal(size=self.W.shape))
-        # self.b.assign(mean + sigma * np.random.normal(size=self.b.shape))
+        self.W.assign(mean + sigma * np.random.normal(size=self.W.shape))
+        self.b.assign(mean + sigma * np.random.normal(size=self.b.shape))
 
 
 class FakeGPR(gpflow.Module):
@@ -163,7 +163,7 @@ class CombinedController(gpflow.Module):
         gpflow.Module.__init__(self)
         if controller_location is None:
             controller_location = np.zeros((1, state_dim), float_type)
-        self.rbc_controller = RbfController(state_dim, control_dim, num_basis_functions, max_action)
+        self.rbf_controller = RbfController(state_dim, control_dim, num_basis_functions, max_action)
         self.linear_controller = LinearController(state_dim, control_dim, max_action, W=W)
         self.a = Parameter(controller_location, trainable=False)
         self.S = Parameter(0 * np.ones((state_dim), float_type),
@@ -176,7 +176,8 @@ class CombinedController(gpflow.Module):
         '''
         d = (x - self.a.read_value()) @ tf.linalg.diag(self.S.read_value()) @ tf.transpose(x - self.a.read_value())
         ratio = 1 / tf.pow(d + 1, 2)
-        return ratio
+        # return ratio
+        return 1
 
     def compute_action(self, m, s, squash=True):
         '''
@@ -186,7 +187,7 @@ class CombinedController(gpflow.Module):
         '''
         r = self.compute_ratio(m)
         M1, S1, V1 = self.linear_controller.compute_action(m, s, False)
-        M2, S2, V2 = self.rbc_controller.compute_action(m, s, False)
+        M2, S2, V2 = self.rbf_controller.compute_action(m, s, False)
         M = (1 - r) * M1 + r * M2
         S = (1 - r) * S1 + r * S2 # + (1 - r) * (M1 - M) @ tf.transpose(M1 - M) + r * (M2 - M) @ tf.transpose(M2 - M)
         V = (1 - r) * V1 + r * V2
@@ -196,13 +197,10 @@ class CombinedController(gpflow.Module):
         return M, S, V
 
     def randomize(self):
-        self.rbc_controller.randomize()
-        self.linear_controller.randomize()
+        self.rbf_controller.randomize()
         mean = 0;
         sigma = 1
         self.S.assign(mean + sigma * np.absolute(np.random.normal(size=self.S.shape)))
-
-        # self.b.assign(mean + sigma * np.random.normal(size=self.b.shape))
 
     def get_S(self):
         return self.S
