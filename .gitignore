@@ -8,3 +8,4 @@ octave-workspace
 examples/.ipynb_checkpoints/
 venv
 .idea
+data
