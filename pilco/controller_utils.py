@@ -3,12 +3,9 @@ import control
 from gym import logger
 
 class LQR:
-    def get_W_matrix(self, A, B, C, env='swing up'):
+    def get_W_matrix(self, A, B, Q, env='swing up'):
         # Compute gain matrix by solving Algebraic Riccati Equation
         # Reference https://www.mathworks.com/help/control/ref/lqr.html
-        Q = np.dot(C.T, C)
-        if env == 'swing up':
-            Q = np.diag([2.0, 2.0])
         R = 1
         K, _, _ = control.lqr(A, B, Q, R)
         K = self.get_k_prime(K, env)

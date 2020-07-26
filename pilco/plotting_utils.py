@@ -4,12 +4,14 @@ from matplotlib import pyplot as plt
 import numpy as np
 import seaborn as sns
 from gym import logger
+import pandas as pd
 
 
 def plot_single_rollout_cycle(state_mean: List[np.ndarray], state_var: List[np.ndarray],
                               rollout: List[List[np.ndarray]], rollout_actions: List[np.ndarray],
-                              all_rewards: List[np.ndarray], internal_state_dim_num: int, action_dim_num: int,
-                              time_steps: int, rollout_num: int, env='swing up'):
+                              all_rewards: List[np.ndarray], all_S: List[np.ndarray], rollout_ratio: List[np.ndarray],
+                              internal_state_dim_num: int, action_dim_num: int,
+                              time_steps: int, rollout_num: int, env='swing up', write_to_csv=False):
     """
 
     Args:
@@ -28,8 +30,9 @@ def plot_single_rollout_cycle(state_mean: List[np.ndarray], state_var: List[np.n
 
     """
     # TODO: Add titles
+    save_data = {}
     width = 3
-    total_graphs = internal_state_dim_num + action_dim_num + 1
+    total_graphs = internal_state_dim_num + 3
     mean_states = np.array(state_mean)
     var_states = np.array(state_var)
     rollouts = np.array(rollout)
@@ -38,18 +41,19 @@ def plot_single_rollout_cycle(state_mean: List[np.ndarray], state_var: List[np.n
     if rollout_actions is not None:
         actions = np.array(rollout_actions)
         assert actions.shape[1] == action_dim_num, "--- Error: Actions dimensions do not match! ---"
-    # if rollout_reward is not None:
-    #     reward = np.array(rollout_reward)
 
     if env == 'swing up':
         states_subtitles = ['cos(theta)', 'sin(theta)', 'theta dot']
         actions_subtitles = ['torque']
+        S_colors = ['green', 'firebrick', 'dimgray']
     elif env == 'cartpole':
         states_subtitles = ['x', 'x_dot', 'cos(theta)', 'sin(theta)', 'theta dot']
         actions_subtitles = ['force']
+        S_colors = ['green', 'firebrick', 'dimgray', 'darkmagenta', 'navy']
     elif env == 'mountain car':
         states_subtitles = ['x', 'x_dot']
         actions_subtitles = ['force']
+        S_colors = ['green', 'firebrick']
     else:
         logger.error("--- Error: plot_single_rollout_cycle() env incorrect! ---")
     assert len(states_subtitles) == internal_state_dim_num, "--- Error: Change states_subtitles! ---"
@@ -57,17 +61,17 @@ def plot_single_rollout_cycle(state_mean: List[np.ndarray], state_var: List[np.n
 
     plt.style.use('seaborn-darkgrid')
 
-    # Calculate reward.
     fig, axs = plt.subplots(math.ceil(total_graphs / width), width, constrained_layout=True)
     fig.suptitle(f'Rollout {rollout_num}', fontsize=16)
     for i in range(total_graphs):
         cur_graph_pos_i, cur_graph_pos_j = i // width, i % width
         plot_states = i < internal_state_dim_num
-        plot_actions = i >= internal_state_dim_num and i < (total_graphs - 1) and rollout_actions is not None
+        plot_S = i == total_graphs - 2 and all_S is not None
+        plot_ratio = i == total_graphs - 3 and rollout_ratio is not None
         plot_reward = i == total_graphs - 1 and all_rewards is not None
         cur_axis = axs[cur_graph_pos_i, cur_graph_pos_j]
 
-        # Plotting the state variables across time
+        # Plotting the state variables across timesteps
         if plot_states:
             y = mean_states[:, i]
             yerr = var_states[:, i]
@@ -75,20 +79,53 @@ def plot_single_rollout_cycle(state_mean: List[np.ndarray], state_var: List[np.n
             cur_axis.fill_between(np.arange(time_steps), y-yerr, y+yerr, alpha=0.5, facecolor='royalblue')
             early_termination_time_steps = rollouts.shape[1]
             cur_axis.plot(np.arange(early_termination_time_steps), rollouts[0, :, i], color='darkorange')
+            cur_axis.set_xlabel('Timesteps')
             cur_axis.set_title(f'State: {states_subtitles[i]}')
 
-        # Plotting the actions across time
-        if plot_actions:
-            # Plot one of the M subplots for actions
-            j = i - internal_state_dim_num
-            cur_axis.plot(np.arange(time_steps), actions[:, j])
-            cur_axis.set_title(f'Action: {actions_subtitles[j]}')
+            save_data[f'states_mean_{i}'] = y
+            save_data[f'states_err_{i}'] = yerr
 
-        # Plotting the rewards across time
+        # # Plotting the actions across timesteps
+        # if plot_actions:
+        #     # Plot one of the M subplots for actions
+        #     j = i - internal_state_dim_num
+        #     cur_axis.plot(np.arange(time_steps), actions[:, j])
+        #     cur_axis.set_title(f'Action: {actions_subtitles[j]}')
+
+        # Plotting the ratio across timesteps
+        if plot_ratio:
+            cur_axis.plot(np.arange(time_steps), rollout_ratio)
+            cur_axis.set_xlabel('Timesteps')
+            cur_axis.set_title(f'Linear Controller Ratio')
+
+            save_data['ratio'] = rollout_ratio
+
+        # Plotting the S across timesteps
+        if plot_S:
+            S_dim = len(all_S[0])
+            for j in range(S_dim):
+                cur_axis.plot(np.arange(rollout_num + 1), all_S[:, j], color=S_colors[j])
+            cur_axis.set_xlabel('Epochs')
+            cur_axis.set_title(f'\u039B of n-Ellipsoid')
+
+            for j in range(S_dim):
+                save_data[f'S_{j}'] = all_S[:, j]
+
+        # Plotting the rewards across rollouts
         if plot_reward:
             cur_axis.plot(np.arange(rollout_num + 1), all_rewards)
+            cur_axis.set_xlabel('Epochs')
             cur_axis.set_title(f'Reward')
+
+            save_data[f'rewards'] = all_rewards
+
     fig.show()
+
+    # Save data to csv
+    if write_to_csv:
+        df = pd.DataFrame(dict([(k, pd.Series(v)) for k, v in save_data.items()]), columns=save_data.keys())
+        df.to_csv(f'save_data_epoch{rollout_num}.csv', index=False, header=True)
+        print(f'ITERATION {rollout_num} saved to csv.')
 
 
 def plot_interaction_barchart(y_extended, y_pilco):
