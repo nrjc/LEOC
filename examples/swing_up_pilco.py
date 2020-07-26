@@ -68,7 +68,9 @@ class myPendulum():
 
         C = np.array([[1, 0]])
 
-        return A, B, C
+        Q = np.diag([2.0, 2.0])
+
+        return A, B, C, Q
 
 
 if __name__ == '__main__':
@@ -90,8 +92,8 @@ if __name__ == '__main__':
 
     # Set up objects and variables
     env = myPendulum(False)
-    A, B, C = env.control()
-    W_matrix = LQR().get_W_matrix(A, B, C, env='swing up')
+    A, B, C, Q = env.control()
+    W_matrix = LQR().get_W_matrix(A, B, Q, env='swing up')
 
     state_dim = 3
     control_dim = 1
@@ -117,8 +119,9 @@ if __name__ == '__main__':
             model.likelihood.variance.assign(0.001)
             set_trainable(model.likelihood.variance, False)
 
-        r_new = np.zeros((T, 1))
+        reward_new = np.zeros((T, 1))
         all_rewards = []
+        all_S = np.empty((0, state_dim), float)
 
         for rollouts in range(N):
             print("**** ITERATION no", rollouts, " ****")
@@ -130,21 +133,30 @@ if __name__ == '__main__':
             # Since we had decide on the various parameters of the reward function
             # we might want to verify that it behaves as expected by inspection
             for i in range(len(X_new)):
-                r_new[:, 0] = R.compute_reward(X_new[i, None, :-1], 0.001 * np.eye(state_dim))[0]
-            total_r = sum(r_new)
-            _, _, r, intermediary_dict = pilco.predict_and_obtain_intermediates(X_new[0, None, :-1], 0.001 * S_init, T)
-            print("Total ", total_r, " Predicted: ", r)
+                reward_new[:, 0] = R.compute_reward(X_new[i, None, :-1], 0.001 * np.eye(state_dim))[0]
+            total_reward = sum(reward_new)
+            _, _, reward, ratio, intermediary_dict = pilco.predict_and_obtain_intermediates(X_new[0, None, :-1], 0.001 * S_init, T)
+            print("Total ", total_reward, " Predicted: ", reward)
 
             # Plotting internal states of pilco variables
-            intermediate_mean, intermediate_var, intermediate_reward = zip(*intermediary_dict)
+            intermediate_mean, intermediate_var, intermediate_reward, intermediate_ratio = zip(*intermediary_dict)
             intermediate_var = [x.diagonal() for x in intermediate_var]
             intermediate_mean = [x[0] for x in intermediate_mean]
-            # get reward of the last time step
+            # Get reward of the last time step
             rollout_reward = intermediate_reward[T - 1][0]
             rollout_reward = np.array(rollout_reward)
             all_rewards.append(rollout_reward[0])
-            plot_single_rollout_cycle(intermediate_mean, intermediate_var, [X_new], None, all_rewards, state_dim,
-                                      control_dim, T, rollouts, env='swing up')
+            # Get linear controller ratio for each timestep of the rollout
+            rollout_ratio = [x for x in intermediate_ratio]
+            # Get S of the rollout
+            rollout_S = pilco.get_controller().S.read_value().numpy()
+            rollout_S = np.array([[1/lam for lam in rollout_S]])
+            all_S = np.append(all_S, rollout_S, axis=0)
+
+            write_to_csv = True if rollouts >= N - 3 else False
+            plot_single_rollout_cycle(intermediate_mean, intermediate_var, [X_new], None, all_rewards, all_S,
+                                      rollout_ratio, state_dim, control_dim, T, rollouts, env='swing up',
+                                      write_to_csv=write_to_csv)
 
             # Update dataset
             X = np.vstack((X, X_new))

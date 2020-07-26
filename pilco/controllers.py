@@ -166,7 +166,8 @@ class CombinedController(gpflow.Module):
         self.rbf_controller = RbfController(state_dim, control_dim, num_basis_functions, max_action)
         self.linear_controller = LinearController(state_dim, control_dim, max_action, W=W)
         self.a = Parameter(controller_location, trainable=False)
-        self.S = Parameter(np.ones((state_dim), float_type), trainable=True, transform=positive())
+        self.S = Parameter(np.ones(state_dim, float_type), trainable=True, transform=positive())
+        self.r = 1
         self.max_action = max_action
 
     def compute_ratio(self, x):
@@ -188,12 +189,12 @@ class CombinedController(gpflow.Module):
         IN: mean (m) and variance (s) of the state
         OUT: mean (M) and variance (S) of the action
         '''
-        r = self.compute_ratio(m)
+        self.r = self.compute_ratio(m)
         M1, S1, V1 = self.linear_controller.compute_action(m, s, False)
         M2, S2, V2 = self.rbf_controller.compute_action(m, s, False)
-        M = r * M1 + (1 - r) * M2
-        S = r * S1 + (1 - r) * S2 + r * (M1 - M) @ tf.transpose(M1 - M) + (1 - r) * (M2 - M) @ tf.transpose(M2 - M)
-        V = r * V1 + (1 - r) * V2
+        M = self.r * M1 + (1 - self.r) * M2
+        S = self.r * S1 + (1 - self.r) * S2 + self.r * (M1 - M) @ tf.transpose(M1 - M) + (1 - self.r) * (M2 - M) @ tf.transpose(M2 - M)
+        V = self.r * V1 + (1 - self.r) * V2
         if squash:
             M, S, V2 = squash_sin(M, S, self.max_action)
             V = V @ V2
