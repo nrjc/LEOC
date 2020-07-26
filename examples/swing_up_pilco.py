@@ -162,7 +162,7 @@ if __name__ == '__main__':
             X = np.vstack((X, X_new))
             Y = np.vstack((Y, Y_new))
             pilco.mgpr.set_data((X, Y))
-            save_gpflow_obj_to_path(controller, os.path.join(model_save_dir, f'controller{rollouts}.pkl'))
+            save_gpflow_obj_to_path(controller, os.path.join(model_save_dir, f'swingup_controller{rollouts}.pkl'))
         plt.show()
 
     else:

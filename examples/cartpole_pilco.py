@@ -1,37 +1,39 @@
 import numpy as np
 import gym
 import random
-
-from pilco.controller_utils import LQR
+import tensorflow as tf
+from gpflow import set_trainable
+from matplotlib import pyplot as plt
+import logging
+logging.basicConfig(level=logging.INFO)
+import gpflow
 from pilco.models import PILCO
 from pilco.controllers import RbfController, LinearController, CombinedController
+from pilco.controller_utils import LQR
 from pilco.plotting_utils import plot_single_rollout_cycle
 from pilco.rewards import ExponentialReward
+from utils import rollout, policy, save_gpflow_obj_to_path
 from examples.envs.cartpole_env import CartPoleEnv
-import tensorflow as tf
-from utils import rollout, policy
-from matplotlib import pyplot as plt
-from gpflow import set_trainable
-
+import os
 np.random.seed(0)
 
 
 class myCartpole():
-    def __init__(self):
-        self.env = CartPoleEnv() # self.env = gym.make('CartPole-v1').env
+    def __init__(self, initialize_top=False):
+        self.env = CartPoleEnv()
         self.action_space = self.env.action_space
         self.observation_space = self.env.observation_space
+        self.up = initialize_top
 
     def step(self, action):
         return self.env.step(action)
 
     def reset(self, up=False):
-        high = np.array([1, 1, np.pi, 1])
-        self.env.state = np.random.uniform(low=-high, high=high)
-        self.env.state = np.random.uniform(low=0, high=0.01 * high)  # only difference
-        if not up:
-            self.env.state[2] += -np.pi
-        self.env.last_u = None
+        if self.up:
+            self.env.state = [0, -1, 0, 2]
+        else:
+            self.env.state = [0, 0, np.pi, 0]
+        self.env.steps_beyond_done = None
         return self.env._get_obs()
 
     def render(self):
@@ -69,12 +71,10 @@ class myCartpole():
         C = np.array([[1, 0, 0, 0],
                       [0, 0, 1, 0]])
 
-        return A, B, C
+        Q = np.diag([1.0, 1.0, 2.0, 2.0])
 
+        return A, B, C, Q
 
-# Introduces subsampling with the parameter SUBS and modified rollout function
-# Introduces priors for better conditioning of the GP model
-# Uses restarts
 
 if __name__ == '__main__':
     # Define params
@@ -87,22 +87,24 @@ if __name__ == '__main__':
     J = 5
     N = 8
     restarts = 2
+    model_save_dir = './'
 
-    # Need to double check init values
     # States := [x, x_dot, cos(theta), sin(theta), theta_dot]
     target = np.array([0.0, 0.0, 1.0, 0.0, 0.0])
     weights = np.diag([1.0, 0.3, 2.0, 2.0, 0.3])
-    m_init = np.reshape([0.0, 0.0, 1.0, 0.0, 0.0], (1, 5))
+    m_init = np.reshape([0.0, 0.0, -1.0, 0.0, 0.0], (1, 5))
     S_init = np.diag([0.01, 0.01, 0.01, 0.05, 0.01])
 
-    env = myCartpole()
-    A, B, C = env.control()
-    W_matrix = LQR().get_W_matrix(A, B, C, env='cartpole')
-
     # Set up objects and variables
+    env = myCartpole(False)
+    A, B, C, Q = env.control()
+    W_matrix = LQR().get_W_matrix(A, B, Q, env='cartpole')
+
     state_dim = 5 # state_dim = env.observation_space.shape[0]
     control_dim = 1
+
     controller_linear = LinearController(state_dim=state_dim, control_dim=control_dim, W=W_matrix, max_action=max_action)
+    # controller = RbfController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf, max_action=max_action)
     controller = CombinedController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf,
                                     controller_location=target, W=W_matrix, max_action=max_action)
     R = ExponentialReward(state_dim=state_dim, t=target, W=weights)
@@ -120,48 +122,62 @@ if __name__ == '__main__':
         for model in pilco.mgpr.models:
             model.likelihood.variance.assign(0.001)
             set_trainable(model.likelihood.variance, False)
-        axis_values = np.zeros((N, state_dim))
-        r_new = np.zeros((T, 1))
+
+        reward_new = np.zeros((T, 1))
+        all_rewards = []
+        all_S = np.empty((0, state_dim), float)
 
         for rollouts in range(N):
             print("**** ITERATION no", rollouts, " ****")
-            pilco.optimize_models(maxiter=maxiter, restarts=2)
-            pilco.optimize_policy(maxiter=maxiter, restarts=2)
-            s_val = pilco.get_controller().get_S()
-            axis_values[rollouts, :] = s_val.numpy()
-            X_new, Y_new, _, _ = rollout(env, pilco, timesteps=T, verbose=False, SUBS=SUBS, render=True)
+            policy_restarts = 1 if rollouts > 3 else 2
+            pilco.optimize_models(maxiter=maxiter, restarts=restarts)
+            pilco.optimize_policy(maxiter=maxiter, restarts=policy_restarts)
+            X_new, Y_new, _, _ = rollout(env, pilco, timesteps=T, verbose=False, SUBS=SUBS)
 
             # Since we had decide on the various parameters of the reward function
             # we might want to verify that it behaves as expected by inspection
             for i in range(len(X_new)):
-                r_new[:, 0] = R.compute_reward(X_new[i, None, :-1], 0.001 * np.eye(state_dim))[0]
-            total_r = sum(r_new)
-            _, _, r, intermediary_dict = pilco.predict_and_obtain_intermediates(X_new[0, None, :-1], 0.001 * S_init, T)
-            print("Total ", total_r, " Predicted: ", r)
-            plt.figure(3)
-            for c_dim in range(state_dim):
-                plt.plot(axis_values[:rollouts, c_dim])
-            plt.pause(0.01)
+                reward_new[:, 0] = R.compute_reward(X_new[i, None, :-1], 0.001 * np.eye(state_dim))[0]
+            total_reward = sum(reward_new)
+            _, _, reward, ratio, intermediary_dict = pilco.predict_and_obtain_intermediates(X_new[0, None, :-1], 0.001 * S_init, T)
+            print("Total ", total_reward, " Predicted: ", reward)
+
             # Plotting internal states of pilco variables
-            intermediate_mean, intermediate_var, intermediate_reward = zip(*intermediary_dict)
+            intermediate_mean, intermediate_var, intermediate_reward, intermediate_ratio = zip(*intermediary_dict)
             intermediate_var = [x.diagonal() for x in intermediate_var]
             intermediate_mean = [x[0] for x in intermediate_mean]
-            plot_single_rollout_cycle(intermediate_mean, intermediate_var, [X_new], None, None, state_dim,
-                                      control_dim, T, rollouts + 1, env='cartpole')
+            # Get reward of the last time step
+            rollout_reward = intermediate_reward[T - 1][0]
+            rollout_reward = np.array(rollout_reward)
+            all_rewards.append(rollout_reward[0])
+            # Get linear controller ratio for each timestep of the rollout
+            rollout_ratio = [x for x in intermediate_ratio]
+            # Get S of the rollout
+            rollout_S = pilco.get_controller().S.read_value().numpy()
+            rollout_S = np.array([[1 / lam for lam in rollout_S]])
+            all_S = np.append(all_S, rollout_S, axis=0)
+
+            # write_to_csv = True if rollouts >= N - 3 else False
+            write_to_csv = False
+            plot_single_rollout_cycle(intermediate_mean, intermediate_var, [X_new], None, all_rewards, all_S,
+                                      rollout_ratio, state_dim, control_dim, T, rollouts, env='cartpole',
+                                      write_to_csv=write_to_csv)
 
             # Update dataset
             X = np.vstack((X, X_new))
             Y = np.vstack((Y, Y_new))
             pilco.mgpr.set_data((X, Y))
+            # save_gpflow_obj_to_path(controller, os.path.join(model_save_dir, f'cartpole_controller{rollouts}.pkl'))
         plt.show()
 
     else:
-        states = env.reset(up=test_linear_control)
+        env.up = True
+        states = env.reset()
         for i in range(500):
             env.render()
             action = controller_linear.compute_action(tf.reshape(tf.convert_to_tensor(states), (1, -1)),
-                                               tf.zeros([state_dim, state_dim], dtype=tf.dtypes.float64),
-                                               squash=False)[0]
+                                                      tf.zeros([state_dim, state_dim], dtype=tf.dtypes.float64),
+                                                      squash=False)[0]
             action = action[0, :].numpy()
             states, _, _, _ = env.step(action)
             print(f'Step: {i}, action: {action}')
