@@ -1,4 +1,5 @@
 import math
+from typing import Tuple, List
 
 import tensorflow as tf
 from tensorflow_probability import distributions as tfd, bijectors
@@ -141,14 +142,33 @@ class RbfController(MGPR):
             sigma = 0.1
             m.kernel.lengthscales.assign(mean + sigma * np.random.normal(size=m.kernel.lengthscales.shape))
 
-    def linearize(self, loc):
+    def linearize(self, loc: np.ndarray) -> List[Tuple[np.ndarray, int]]:
+        """ Linearize the RBF controller about a certain point loc, and return the weight and bias for each of
+        the output dimensions.
+
+        Args:
+            loc: point about which to linearize [state_dim, 1]
+
+        Returns: Returns a list of tuples
+
+        """
+        total_rbfs = self.num_datapoints
+        returnable_obj = []
+        state_dim = self.num_dims
+        bias_term_collector = 0
+        weight_term_collector = 0
         for m in self.models:
-            m.X.assign(np.random.normal(size=m.data[0].shape))
-            m.Y.assign(self.max_action / 10 * np.random.normal(size=m.data[1].shape))
-            mean = 1;
-            sigma = 0.1
-            m.kernel.lengthscales.assign(mean + sigma * np.random.normal(size=m.kernel.lengthscales.shape))
-        return
+            centers = m.data[0][:, :].numpy()
+            for center in centers:
+                var = m.kernel.lengthscales.numpy()
+                temp = (loc - center).reshape(state_dim, 1)
+                exp_term = m.kernel.variance.numpy() * np.exp(
+                    -0.5 * (temp.T @ np.diag(1 / var) @ temp).item())  # Check that it is truly 1/var and not var
+                differential_term = exp_term * (np.diag(1 / var) @ temp)
+                bias_term_collector += (exp_term - differential_term.T @ center.reshape(state_dim, 1)).item()
+                weight_term_collector += differential_term
+            returnable_obj.append((weight_term_collector / total_rbfs, bias_term_collector / total_rbfs))
+        return returnable_obj
 
 
 class CombinedController(gpflow.Module):
