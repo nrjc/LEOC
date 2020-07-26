@@ -43,15 +43,16 @@ def plot_single_rollout_cycle(state_mean: List[np.ndarray], state_var: List[np.n
         assert actions.shape[1] == action_dim_num, "--- Error: Actions dimensions do not match! ---"
 
     if env == 'swing up':
-        states_subtitles = ['cos(theta)', 'sin(theta)', 'theta dot']
+        states_subtitles = [f'cos(\u03B8)', f'sin(\u03B8)', f'\u03B8_dot']
         actions_subtitles = ['torque']
-        S_colors = ['green', 'firebrick', 'dimgray']
+        S_colors = ['green', 'gold', 'firebrick']
+        S_legend = [f'\u03BB_cos(\u03B8)', f'\u03BB_sin(\u03B8)', f'\u03BB_\u03B8_dot']
     elif env == 'cartpole':
-        states_subtitles = ['x', 'x_dot', 'cos(theta)', 'sin(theta)', 'theta dot']
+        states_subtitles = [f'x', f'x_dot', f'cos(\u03B8)', f'sin(\u03B8)', f'\u03B8_dot']
         actions_subtitles = ['force']
         S_colors = ['green', 'firebrick', 'dimgray', 'darkmagenta', 'navy']
     elif env == 'mountain car':
-        states_subtitles = ['x', 'x_dot']
+        states_subtitles = [f'x', f'x_dot']
         actions_subtitles = ['force']
         S_colors = ['green', 'firebrick']
     else:
@@ -61,7 +62,7 @@ def plot_single_rollout_cycle(state_mean: List[np.ndarray], state_var: List[np.n
 
     plt.style.use('seaborn-darkgrid')
 
-    fig, axs = plt.subplots(math.ceil(total_graphs / width), width, constrained_layout=True)
+    fig, axs = plt.subplots(math.ceil(total_graphs / width), width, figsize=(9, 6), constrained_layout=True)
     fig.suptitle(f'Rollout {rollout_num}', fontsize=16)
     for i in range(total_graphs):
         cur_graph_pos_i, cur_graph_pos_j = i // width, i % width
@@ -75,11 +76,12 @@ def plot_single_rollout_cycle(state_mean: List[np.ndarray], state_var: List[np.n
         if plot_states:
             y = mean_states[:, i]
             yerr = var_states[:, i]
-            cur_axis.plot(np.arange(time_steps), y, color='royalblue')
-            cur_axis.fill_between(np.arange(time_steps), y-yerr, y+yerr, alpha=0.5, facecolor='royalblue')
+            cur_axis.plot(np.arange(time_steps), y, color='royalblue', label='Predict')
+            cur_axis.fill_between(np.arange(time_steps), y-yerr, y+yerr, alpha=0.5, facecolor='royalblue', label=f'\u00B1\u03C3_Predict')
             early_termination_time_steps = rollouts.shape[1]
-            cur_axis.plot(np.arange(early_termination_time_steps), rollouts[0, :, i], color='darkorange')
+            cur_axis.plot(np.arange(early_termination_time_steps), rollouts[0, :, i], color='darkorange', label='Actual')
             cur_axis.set_xlabel('Timesteps')
+            cur_axis.legend()
             cur_axis.set_title(f'State: {states_subtitles[i]}')
 
             save_data[f'states_mean_{i}'] = y
@@ -100,12 +102,13 @@ def plot_single_rollout_cycle(state_mean: List[np.ndarray], state_var: List[np.n
 
             save_data['ratio'] = rollout_ratio
 
-        # Plotting the S across timesteps
+        # Plotting the S across rollouts
         if plot_S:
             S_dim = len(all_S[0])
             for j in range(S_dim):
-                cur_axis.plot(np.arange(rollout_num + 1), all_S[:, j], color=S_colors[j])
+                cur_axis.plot(np.arange(rollout_num + 1), all_S[:, j], color=S_colors[j], label=S_legend[j])
             cur_axis.set_xlabel('Epochs')
+            cur_axis.legend()
             cur_axis.set_title(f'\u039B of n-Ellipsoid')
 
             for j in range(S_dim):
