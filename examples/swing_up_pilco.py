@@ -6,14 +6,14 @@ from gpflow import set_trainable
 from matplotlib import pyplot as plt
 import logging
 logging.basicConfig(level=logging.INFO)
-
+import gpflow
 from pilco.models import PILCO
 from pilco.controllers import RbfController, LinearController, CombinedController
 from pilco.controller_utils import LQR
 from pilco.plotting_utils import plot_single_rollout_cycle
 from pilco.rewards import ExponentialReward, L2HarmonicPenalization, CombinedRewards
-from utils import rollout, policy
-
+from utils import rollout, policy, save_gpflow_obj_to_path
+import os
 np.random.seed(0)
 
 # NEEDS a different initialisation than the one in gym (change the reset() method),
@@ -88,6 +88,7 @@ if __name__ == '__main__':
     J = 4
     N = 8
     restarts = 2
+    model_save_dir = './'
 
     # Set up objects and variables
     env = myPendulum(False)
@@ -161,6 +162,7 @@ if __name__ == '__main__':
             X = np.vstack((X, X_new))
             Y = np.vstack((Y, Y_new))
             pilco.mgpr.set_data((X, Y))
+            save_gpflow_obj_to_path(controller, os.path.join(model_save_dir, f'controller{rollouts}.pkl'))
         plt.show()
 
     else:
