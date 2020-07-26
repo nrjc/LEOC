@@ -2,6 +2,7 @@ import unittest
 import numpy as np
 import utils
 import os
+from tempfile import mkstemp
 
 
 class TestSaveLoad(unittest.TestCase):
@@ -12,9 +13,10 @@ class TestSaveLoad(unittest.TestCase):
         controller = CombinedController(state_dim=3, control_dim=1, num_basis_functions=bf,
                                         controller_location=np.array([1.0, 0.0, 0.0]), W=np.identity(3),
                                         max_action=max_action)
-        utils.save_gpflow_obj_to_path(controller, 'testfile')
-        c2 = utils.load_controller_from_obj('testfile')
-        os.remove('testfile')
+        _, temp_path = mkstemp()
+        utils.save_gpflow_obj_to_path(controller, temp_path)
+        c2 = utils.load_controller_from_obj(temp_path)
+        os.remove(temp_path)
 
 
 if __name__ == '__main__':
