@@ -179,7 +179,7 @@ class CombinedController(gpflow.Module):
         # d = (x - a) @ tf.linalg.inv(tf.linalg.diag(S)) @ tf.transpose(x - a)
         d = (x - a) @ tf.linalg.diag(S) @ tf.transpose(x - a)
         # ratio = 1 / tf.pow(d + 1, 2)
-        ratio = 1 / (d + 1)
+        ratio = 1 / tf.pow(d + 1, 2)
         return ratio
 
     def compute_action(self, m, s, squash=True):
