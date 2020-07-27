@@ -100,7 +100,8 @@ def plot_single_rollout_cycle(state_mean: List[np.ndarray], state_var: List[np.n
 
         # Plotting the ratio across timesteps
         if plot_ratio:
-            cur_axis.plot(np.arange(time_steps), rollout_ratio, color='darkorange', label='Actual')
+            cur_axis.plot(np.arange(len(rollout_ratio)), rollout_ratio, color='darkorange', label='Actual')
+            cur_axis.set_xlim(0, time_steps)
             cur_axis.set_xlabel('Timesteps')
             cur_axis.legend()
             cur_axis.set_title(f'Linear Controller Ratio')
