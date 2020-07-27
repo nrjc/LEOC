@@ -5,8 +5,9 @@ import numpy as np
 import gym
 
 from pilco.controller_utils import LQR
-from pilco.controllers import CombinedController
+from pilco.controllers import CombinedController, LinearController
 from pilco.noise_robust_analysis import percentage_stable, analyze_robustness
+from utils import load_controller_from_obj
 
 
 class myPendulum():
@@ -36,7 +37,7 @@ class myPendulum():
 
     def mutate_with_noise(self, noise_mag, arg_names: List[str]):
         for k in arg_names:
-            self.env.__dict__[k] = self.env.__dict__[k] + np.random.normal(0, noise_mag)
+            self.env.__dict__[k] = self.env.__dict__[k] * (1 + np.random.uniform(-noise_mag, noise_mag))
 
     def control(self):
         # m := mass of pendulum
@@ -79,16 +80,22 @@ class TestRobustNess(unittest.TestCase):
 
         self.controller = CombinedController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf,
                                              controller_location=target, W=W_matrix, max_action=max_action)
+        self.lin_controller = LinearController(state_dim=state_dim, control_dim=control_dim, W=W_matrix,
+                                         max_action=max_action)
+        self.rbf_controller = load_controller_from_obj('data/swingup/rbf/swingup_rbf_controller4.pkl')
         self.env = env
 
     def test_percentage_stable(self):
         percentage_stable(self.controller, self.env, [(0.5, 1.2), (-np.pi / 4, np.pi / 4), (-1, 1)], ['g', 'm', 'l'], 0.2)
 
     def test_stable_across_noise(self):
-        p_stasble = analyze_robustness(self.controller, self.env, [(0.5, 1.2), (-np.pi / 4, np.pi / 4), (-1, 1)], ['g', 'm', 'l'],
-                          np.asarray([0.1, 1., 10., 100.]))
+        p_extended = analyze_robustness(self.controller, self.env, [(0.5, 1.2), (-.0192, .0192), (-1, 1)], ['g', 'm', 'l'],
+                          np.asarray([0.1, 0.3, 0.5, 0.7, 1.0]))
+        p_linear = analyze_robustness(self.lin_controller, self.env, [(0.5, 1.2), (-.0192, .0192), (-1, 1)], ['g', 'm', 'l'],
+                          np.asarray([0.1, 0.3, 0.5, 0.7, 1.0]))
+        p_rbf = analyze_robustness(self.rbf_controller, self.env, [(0.5, 1.2), (-.0192, .0192), (-1, 1)], ['g', 'm', 'l'],
+                          np.asarray([0.1, 0.3, 0.5, 0.7, 1.0]))
         pass
-
 
 if __name__ == '__main__':
     unittest.main()

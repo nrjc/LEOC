@@ -29,7 +29,7 @@ def percentage_stable(controller, env, function_boundaries: List[Tuple[float, fl
 def is_stable(controller, env, function_boundaries: List[Tuple[float, float]]) -> bool:
     states = env.reset()
     stable = True
-    for i in range(20):
+    for i in range(40):
         action = controller.compute_action(tf.reshape(tf.convert_to_tensor(states), (1, -1)),
                                            tf.zeros([env.observation_space_dim, env.observation_space_dim],
                                                     dtype=tf.dtypes.float64),
