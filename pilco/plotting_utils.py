@@ -33,7 +33,7 @@ def plot_single_rollout_cycle(state_mean: List[np.ndarray], state_var: List[np.n
     save_data = {}
     total_graphs = internal_state_dim_num + 3
     width = 3
-    height = int((total_graphs // width) + 1)
+    height = math.ceil(total_graphs / width)
 
     mean_states = np.array(state_mean)
     var_states = np.array(state_var)

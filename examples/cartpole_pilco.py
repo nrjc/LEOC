@@ -71,7 +71,7 @@ class myCartpole():
         C = np.array([[1, 0, 0, 0],
                       [0, 0, 1, 0]])
 
-        Q = np.diag([1.0, 1.0, 2.0, 2.0])
+        Q = np.diag([3., 0.3, 2.0, 0.3])
 
         return A, B, C, Q
 
@@ -85,13 +85,13 @@ if __name__ == '__main__':
     max_action = 50.0
     T = 40
     J = 5
-    N = 8
+    N = 12
     restarts = 2
     model_save_dir = './'
 
     # States := [x, x_dot, cos(theta), sin(theta), theta_dot]
     target = np.array([0.0, 0.0, 1.0, 0.0, 0.0])
-    weights = np.diag([1.0, 0.3, 2.0, 2.0, 0.3])
+    weights = np.diag([3.0, 0.3, 2.0, 2.0, 0.3])
     m_init = np.reshape([0.0, 0.0, -1.0, 0.0, 0.0], (1, 5))
     S_init = np.diag([0.01, 0.01, 0.01, 0.05, 0.01])
 
