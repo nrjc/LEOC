@@ -57,7 +57,7 @@ class myMountainCar():
 
         C = np.array([[1, 0]])
 
-        Q = np.diag([2.0, 2.0])
+        Q = np.diag([4.0, 2.0])
 
         return A, B, C, Q
 
