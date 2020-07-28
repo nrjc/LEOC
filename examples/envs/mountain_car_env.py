@@ -34,8 +34,8 @@ class Continuous_MountainCarEnv(gym.Env):
         self.goal_position = (0.0 - self.x_offset) / self.x_scale
 
         self.gravity = 9.8
-        self.masscart = 1.0
-        self.force_max = 50.0
+        self.masscart = 0.1
+        self.force_max = 3.0
         self.tau = 0.02  # seconds between state updates
 
         self.low_state = np.array(

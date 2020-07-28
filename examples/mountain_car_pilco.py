@@ -29,7 +29,7 @@ class myMountainCar():
 
     def reset(self):
         if self.up:
-            self.env.state = [1.0, 2.0]
+            self.env.state = [-np.pi / 16, 0.0]
         else:
             self.env.state = [-np.pi, 0.0]
         self.env.steps_beyond_done = None
@@ -68,8 +68,8 @@ if __name__ == '__main__':
     SUBS = 3
     bf = 30
     maxiter = 50
-    max_action = 50.0
-    T = 40
+    max_action = 3.0
+    T = 50
     J = 5
     N = 8
     restarts = 2
@@ -90,9 +90,9 @@ if __name__ == '__main__':
     control_dim = 1
 
     controller_linear = LinearController(state_dim=state_dim, control_dim=control_dim, W=W_matrix, max_action=max_action)
-    # controller = RbfController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf, max_action=max_action)
-    controller = CombinedController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf,
-                                    controller_location=target, W=W_matrix, max_action=max_action)
+    controller = RbfController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf, max_action=max_action)
+    # controller = CombinedController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf,
+    #                                 controller_location=target, W=W_matrix, max_action=max_action)
     R = ExponentialReward(state_dim=state_dim, t=target, W=weights)
 
     if not test_linear_control:
@@ -136,16 +136,17 @@ if __name__ == '__main__':
             rollout_reward = intermediate_reward[T - 1][0]
             rollout_reward = np.array(rollout_reward)
             all_rewards.append(rollout_reward[0])
-            # Get S of the rollout
-            rollout_S = pilco.get_controller().S.read_value().numpy()
-            rollout_S_inverse = np.array([[1 / lam for lam in rollout_S]])
-            all_S = np.append(all_S, rollout_S_inverse, axis=0)
-            # Get linear controller ratio for each timestep of the rollout
-            realised_states = [x[:state_dim] for x in X_new]
-            rollout_ratio = [calculate_ratio(x, target, rollout_S) for x in realised_states]
+            # # Get S of the rollout
+            # rollout_S = pilco.get_controller().S.read_value().numpy()
+            # rollout_S_inverse = np.array([[1 / lam for lam in rollout_S]])
+            # all_S = np.append(all_S, rollout_S_inverse, axis=0)
+            # # Get linear controller ratio for each timestep of the rollout
+            # realised_states = [x[:state_dim] for x in X_new]
+            # rollout_ratio = [calculate_ratio(x, target, rollout_S) for x in realised_states]
 
             # write_to_csv = True if rollouts >= N - 3 else False
             write_to_csv = False
+            rollout_ratio, all_S = None, None
             plot_single_rollout_cycle(intermediate_mean, intermediate_var, [X_new], None, all_rewards, all_S,
                                       rollout_ratio, state_dim, control_dim, T, rollouts, env='mountain car',
                                       write_to_csv=write_to_csv)

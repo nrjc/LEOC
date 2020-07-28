@@ -164,7 +164,7 @@ def plot_interaction_barchart(y_extended, y_pilco):
 if __name__ == '__main__':
 
     # Choose the height of the bars
-    y_extended = [18, 10.4, 30]
-    y_pilco = [26, 17.5, 30]
+    y_extended = [18, 12.0, 6.2]
+    y_pilco = [26, 17.5, 9.6]
 
     plot_interaction_barchart(y_extended, y_pilco)
