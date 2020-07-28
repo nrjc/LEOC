@@ -100,8 +100,10 @@ def plot_single_rollout_cycle(state_mean: List[np.ndarray], state_var: List[np.n
 
         # Plotting the ratio across timesteps
         if plot_ratio:
-            cur_axis.plot(np.arange(time_steps), rollout_ratio)
+            cur_axis.plot(np.arange(len(rollout_ratio)), rollout_ratio, color='darkorange', label='Actual')
+            cur_axis.set_xlim(0, time_steps)
             cur_axis.set_xlabel('Timesteps')
+            cur_axis.legend()
             cur_axis.set_title(f'Linear Controller Ratio')
 
             save_data['ratio'] = rollout_ratio
@@ -120,8 +122,9 @@ def plot_single_rollout_cycle(state_mean: List[np.ndarray], state_var: List[np.n
 
         # Plotting the rewards across rollouts
         if plot_reward:
-            cur_axis.plot(np.arange(rollout_num + 1), all_rewards)
+            cur_axis.plot(np.arange(rollout_num + 1), all_rewards, label='Predicted')
             cur_axis.set_xlabel('Epochs')
+            cur_axis.legend()
             cur_axis.set_title(f'Reward')
 
             save_data[f'rewards'] = all_rewards
@@ -161,7 +164,7 @@ def plot_interaction_barchart(y_extended, y_pilco):
 if __name__ == '__main__':
 
     # Choose the height of the bars
-    y_extended = [30, 9.6, 30]
-    y_pilco = [30, 17.5, 30]
+    y_extended = [18, 10.4, 30]
+    y_pilco = [26, 17.5, 30]
 
     plot_interaction_barchart(y_extended, y_pilco)

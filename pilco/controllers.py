@@ -44,13 +44,13 @@ def squash_sin(m, s, max_action=None):
 
 
 class LinearController(gpflow.Module):
-    def __init__(self, state_dim, control_dim, max_action=1.0, W=None, b=None):
+    def __init__(self, state_dim, control_dim, max_action=1.0, W=None, b=None, trainable=True):
         gpflow.Module.__init__(self)
         if W is None:
-            self.W = Parameter(np.random.rand(control_dim, state_dim))
+            self.W = Parameter(np.random.rand(control_dim, state_dim), trainable=trainable)
         else:
-            self.W = Parameter(W)
-        self.b = Parameter(np.zeros((1, control_dim), dtype=float_type))
+            self.W = Parameter(W, trainable=trainable)
+        self.b = Parameter(np.zeros((1, control_dim), dtype=float_type), trainable=trainable)
         self.max_action = max_action
 
     def compute_action(self, m, s, squash=True):
@@ -186,7 +186,7 @@ class CombinedController(gpflow.Module):
         if controller_location is None:
             controller_location = np.zeros((1, state_dim), float_type)
         self.rbf_controller = RbfController(state_dim, control_dim, num_basis_functions, max_action)
-        self.linear_controller = LinearController(state_dim, control_dim, max_action, W=W)
+        self.linear_controller = LinearController(state_dim, control_dim, max_action, W=W, trainable=False)
         self.a = Parameter(controller_location, trainable=False)
         self.S = Parameter(5 * np.ones(state_dim, float_type), trainable=True, transform=positive(1e-4))
         self.r = 1
@@ -198,10 +198,7 @@ class CombinedController(gpflow.Module):
         '''
         S = self.S.read_value()
         a = self.a.read_value()
-        # S = tf.constant([1.0, 2.0, 0.0])
-        # d = (x - a) @ tf.linalg.inv(tf.linalg.diag(S)) @ tf.transpose(x - a)
         d = (x - a) @ tf.linalg.diag(S) @ tf.transpose(x - a)
-        # ratio = 1 / tf.pow(d + 1, 2)
         ratio = 1 / tf.pow(d + 1, 2)
         return ratio
 

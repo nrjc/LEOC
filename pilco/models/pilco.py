@@ -157,27 +157,18 @@ class PILCO(gpflow.models.BayesianModel):
             tf.convert_to_tensor(m_x),
             tf.convert_to_tensor(s_x),
             tf.constant([[0]], float_type),
-            tf.constant(0, float_type)
         ]
         storage_list = []
 
-        _, m_x, s_x, reward, ratio = tf.while_loop(
+        _, m_x, s_x, reward = tf.while_loop(
             # Termination condition
-            lambda j, m_x, s_x, reward, ratio: j < n,
+            lambda j, m_x, s_x, reward: j < n,
             # Body function
-            lambda j, m_x, s_x, reward, ratio: self.run_condition_intermediates(j, m_x, s_x, reward, ratio, storage_list),
+            lambda j, m_x, s_x, reward: self.run_condition(j, m_x, s_x, reward, storage_list),
             loop_vars
         )
-        return m_x, s_x, reward, ratio, storage_list
+        return m_x, s_x, reward, storage_list
 
-    def run_condition_intermediates(self, cur_timestep, m_x, s_x, cur_reward, ratio, recording_list=None):
-        if recording_list is not None:
-            recording_list.append((m_x.numpy(), s_x.numpy(), cur_reward, ratio))
-        return (cur_timestep + 1,
-                *self.propagate(m_x, s_x),
-                tf.add(cur_reward, self.reward.compute_reward(m_x, s_x)[0]),
-                # self.controller.S.read_value(),
-                self.controller.r)
 
     def propagate(self, m_x, s_x):
         m_u, s_u, c_xu = self.controller.compute_action(m_x, s_x)

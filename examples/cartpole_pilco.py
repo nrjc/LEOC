@@ -9,7 +9,7 @@ logging.basicConfig(level=logging.INFO)
 import gpflow
 from pilco.models import PILCO
 from pilco.controllers import RbfController, LinearController, CombinedController
-from pilco.controller_utils import LQR
+from pilco.controller_utils import LQR, calculate_ratio
 from pilco.plotting_utils import plot_single_rollout_cycle
 from pilco.rewards import ExponentialReward
 from utils import rollout, policy, save_gpflow_obj_to_path
@@ -28,7 +28,7 @@ class myCartpole():
     def step(self, action):
         return self.env.step(action)
 
-    def reset(self, up=False):
+    def reset(self):
         if self.up:
             self.env.state = [0, -1, 0, 2]
         else:
@@ -139,23 +139,24 @@ if __name__ == '__main__':
             for i in range(len(X_new)):
                 reward_new[:, 0] = R.compute_reward(X_new[i, None, :-1], 0.001 * np.eye(state_dim))[0]
             total_reward = sum(reward_new)
-            _, _, reward, ratio, intermediary_dict = pilco.predict_and_obtain_intermediates(X_new[0, None, :-1], 0.001 * S_init, T)
+            _, _, reward, intermediary_dict = pilco.predict_and_obtain_intermediates(X_new[0, None, :-1], 0.001 * S_init, T)
             print("Total ", total_reward, " Predicted: ", reward)
 
             # Plotting internal states of pilco variables
-            intermediate_mean, intermediate_var, intermediate_reward, intermediate_ratio = zip(*intermediary_dict)
+            intermediate_mean, intermediate_var, intermediate_reward = zip(*intermediary_dict)
             intermediate_var = [x.diagonal() for x in intermediate_var]
             intermediate_mean = [x[0] for x in intermediate_mean]
             # Get reward of the last time step
             rollout_reward = intermediate_reward[T - 1][0]
             rollout_reward = np.array(rollout_reward)
             all_rewards.append(rollout_reward[0])
-            # Get linear controller ratio for each timestep of the rollout
-            rollout_ratio = [x for x in intermediate_ratio]
             # Get S of the rollout
             rollout_S = pilco.get_controller().S.read_value().numpy()
-            rollout_S = np.array([[1 / lam for lam in rollout_S]])
-            all_S = np.append(all_S, rollout_S, axis=0)
+            rollout_S_inverse = np.array([[1 / lam for lam in rollout_S]])
+            all_S = np.append(all_S, rollout_S_inverse, axis=0)
+            # Get linear controller ratio for each timestep of the rollout
+            realised_states = [x[:state_dim] for x in X_new]
+            rollout_ratio = [calculate_ratio(x, target, rollout_S) for x in realised_states]
 
             # write_to_csv = True if rollouts >= N - 3 else False
             write_to_csv = False
@@ -167,7 +168,7 @@ if __name__ == '__main__':
             X = np.vstack((X, X_new))
             Y = np.vstack((Y, Y_new))
             pilco.mgpr.set_data((X, Y))
-            # save_gpflow_obj_to_path(controller, os.path.join(model_save_dir, f'cartpole_controller{rollouts}.pkl'))
+            save_gpflow_obj_to_path(controller, os.path.join(model_save_dir, f'cartpole_controller{rollouts}.pkl'))
         plt.show()
 
     else:
