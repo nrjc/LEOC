@@ -159,14 +159,15 @@ class RbfController(MGPR):
         weight_term_collector = 0
         for m in self.models:
             centers = m.data[0][:, :].numpy()
-            for center in centers:
-                lengthscale = np.diag(1/m.kernel.lengthscales.numpy())
+            f_weight = m.data[1][:,0].numpy()
+            for center, weight in zip(centers, f_weight):
+                lengthscale = np.diag(np.square(1/m.kernel.lengthscales.numpy()))
                 temp = (loc - center).reshape(state_dim, 1)
                 exp_term = m.kernel.variance.numpy() * np.exp(
                     -0.5 * (temp.T @ lengthscale@ temp).item())  # Check that it is truly 1/var and not var
                 differential_term = -exp_term * (lengthscale @ temp)
-                bias_term_collector += (exp_term - differential_term.T @ loc.reshape(state_dim, 1)).item()
-                weight_term_collector += differential_term
+                bias_term_collector += weight*(exp_term - differential_term.T @ loc.reshape(state_dim, 1)).item()
+                weight_term_collector += weight*differential_term
             returnable_obj.append((weight_term_collector, bias_term_collector))
             bias_term_collector = 0
             weight_term_collector = 0
