@@ -34,3 +34,9 @@ class LQR:
         else:
             logger.error("--- Error: LQR.get_k_prime() env incorrect! ---")
         return K_prime
+
+
+def calculate_ratio(x, a, S):
+    d = (x - a) @ np.diag(S) @ (x - a).transpose()
+    ratio = 1 / np.power(d + 1, 2)
+    return ratio
