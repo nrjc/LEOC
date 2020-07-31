@@ -77,9 +77,11 @@ def plot_single_rollout_cycle(state_mean: List[np.ndarray], state_var: List[np.n
             y = mean_states[:, i]
             yerr = var_states[:, i]
             cur_axis.plot(np.arange(time_steps), y, color='royalblue', label='Predict')
-            cur_axis.fill_between(np.arange(time_steps), y-yerr, y+yerr, alpha=0.5, facecolor='royalblue', label=f'\u00B1\u03C3_Predict')
+            cur_axis.fill_between(np.arange(time_steps), y - yerr, y + yerr, alpha=0.5, facecolor='royalblue',
+                                  label=f'\u00B1\u03C3_Predict')
             early_termination_time_steps = rollouts.shape[1]
-            cur_axis.plot(np.arange(early_termination_time_steps), rollouts[0, :, i], color='darkorange', label='Actual')
+            cur_axis.plot(np.arange(early_termination_time_steps), rollouts[0, :, i], color='darkorange',
+                          label='Actual')
             cur_axis.set_xlabel('Timesteps')
             cur_axis.legend()
             cur_axis.set_title(f'State: {states_subtitles[i]}')
@@ -131,6 +133,25 @@ def plot_single_rollout_cycle(state_mean: List[np.ndarray], state_var: List[np.n
         print(f'ITERATION {rollout_num} saved to csv.')
 
 
+def plot_stability_analysis_chart(percentage_stable: List[np.ndarray], noise_value: List[np.ndarray], names: List[str]):
+
+    num_lines = len(percentage_stable)
+    colors = ['royalblue', 'orange', 'green']
+    # The x position of bars
+
+    plt.style.use('seaborn-darkgrid')
+
+    # Create the bars
+    for i in range(num_lines):
+        plt.plot(noise_value[i], percentage_stable[i], color=colors[i % len(colors)], label=names[i])
+    # general layout
+    plt.xlabel('noise magnitude')
+    plt.ylabel('% stable')
+    plt.legend()
+    # Show graphic
+    plt.show()
+
+
 def plot_interaction_barchart(y_extended, y_pilco):
     # width of the bars
     barWidth = 0.2
@@ -146,7 +167,7 @@ def plot_interaction_barchart(y_extended, y_pilco):
     plt.bar(r2, y_extended, width=barWidth, color='orange', capsize=15, label='Extended RBF controller')
 
     # general layout
-    plt.xticks([r + barWidth/2 for r in range(len(y_extended))], ['Swing-up pendulum', 'Cartpole', 'Mountain car'])
+    plt.xticks([r + barWidth / 2 for r in range(len(y_extended))], ['Swing-up pendulum', 'Cartpole', 'Mountain car'])
     plt.ylabel('Interaction time')
     plt.legend()
 
@@ -155,7 +176,6 @@ def plot_interaction_barchart(y_extended, y_pilco):
 
 
 if __name__ == '__main__':
-
     # Choose the height of the bars
     y_extended = [30, 9.6, 30]
     y_pilco = [30, 17.5, 30]
