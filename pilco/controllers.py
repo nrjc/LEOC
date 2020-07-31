@@ -152,6 +152,47 @@ class RbfController(MGPR):
         Returns: Returns a list of tuples
 
         """
+        return self.linearize_math(loc)
+
+    def linearize_sample(self, loc: np.ndarray) -> Tuple[np.ndarray, int]:
+        """ Linearize the RBF controller about a certain point loc, and return the weight and bias for each of
+        the output dimensions.
+
+        Args:
+            loc: point about which to linearize [state_dim, 1]
+
+        Returns: Returns a list of tuples
+
+        """
+        N = loc.shape[0]
+
+        mid_p = self.compute_action(tf.reshape(tf.convert_to_tensor(loc), (1, -1)),
+                                   tf.zeros([N, N], dtype=tf.dtypes.float64),
+                                   squash=True)[0].numpy()
+        epsilon = 1e-6
+        weight = np.zeros_like(loc)
+        for i in range(len(weight)):
+            loc_temp = np.copy(loc)
+            small_delta = np.zeros_like(loc)
+            small_delta[i] = epsilon
+            loc_temp += small_delta
+            weight[i] = (self.compute_action(tf.reshape(tf.convert_to_tensor(loc_temp), (1, -1)),
+                                             tf.zeros([N, N], dtype=tf.dtypes.float64),
+                                             squash=True)[0] - mid_p) / epsilon
+        bias = mid_p - weight @ loc
+
+        return (weight, bias)
+
+    def linearize_math(self, loc: np.ndarray) -> List[Tuple[np.ndarray, int]]:
+        """ Linearize the RBF controller about a certain point loc, and return the weight and bias for each of
+        the output dimensions.
+
+        Args:
+            loc: point about which to linearize [state_dim, 1]
+
+        Returns: Returns a list of tuples
+
+        """
         total_rbfs = self.num_datapoints
         returnable_obj = []
         state_dim = self.num_dims
@@ -159,15 +200,18 @@ class RbfController(MGPR):
         weight_term_collector = 0
         for m in self.models:
             centers = m.data[0][:, :].numpy()
-            for center in centers:
-                var = m.kernel.lengthscales.numpy()
+            f_weight = m.data[1][:,0].numpy()
+            for center, weight in zip(centers, f_weight):
+                lengthscale = np.diag(np.square(1/m.kernel.lengthscales.numpy()))
                 temp = (loc - center).reshape(state_dim, 1)
                 exp_term = m.kernel.variance.numpy() * np.exp(
-                    -0.5 * (temp.T @ np.diag(1 / var) @ temp).item())  # Check that it is truly 1/var and not var
-                differential_term = exp_term * (np.diag(1 / var) @ temp)
-                bias_term_collector += (exp_term - differential_term.T @ center.reshape(state_dim, 1)).item()
-                weight_term_collector += differential_term
-            returnable_obj.append((weight_term_collector / total_rbfs, bias_term_collector / total_rbfs))
+                    -0.5 * (temp.T @ lengthscale@ temp).item())  # Check that it is truly 1/var and not var
+                differential_term = -exp_term * (lengthscale @ temp)
+                bias_term_collector += weight*(exp_term - differential_term.T @ loc.reshape(state_dim, 1)).item()
+                weight_term_collector += weight*differential_term
+            returnable_obj.append((weight_term_collector, bias_term_collector))
+            bias_term_collector = 0
+            weight_term_collector = 0
         return returnable_obj
 
 
@@ -186,7 +230,7 @@ class CombinedController(gpflow.Module):
         self.rbf_controller = RbfController(state_dim, control_dim, num_basis_functions, max_action)
         self.linear_controller = LinearController(state_dim, control_dim, max_action, W=W)
         self.a = Parameter(controller_location, trainable=False)
-        self.S = Parameter(np.ones(state_dim, float_type), trainable=True, transform=positive())
+        self.S = Parameter(5 * np.ones(state_dim, float_type), trainable=True, transform=positive(1e-4))
         self.r = 1
         self.max_action = max_action
 
@@ -213,7 +257,8 @@ class CombinedController(gpflow.Module):
         M1, S1, V1 = self.linear_controller.compute_action(m, s, False)
         M2, S2, V2 = self.rbf_controller.compute_action(m, s, False)
         M = self.r * M1 + (1 - self.r) * M2
-        S = self.r * S1 + (1 - self.r) * S2 + self.r * (M1 - M) @ tf.transpose(M1 - M) + (1 - self.r) * (M2 - M) @ tf.transpose(M2 - M)
+        S = self.r * S1 + (1 - self.r) * S2 + self.r * (M1 - M) @ tf.transpose(M1 - M) + (1 - self.r) * (
+                M2 - M) @ tf.transpose(M2 - M)
         V = self.r * V1 + (1 - self.r) * V2
         if squash:
             M, S, V2 = squash_sin(M, S, self.max_action)
