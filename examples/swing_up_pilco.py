@@ -5,19 +5,16 @@ import tensorflow as tf
 from gpflow import set_trainable
 from matplotlib import pyplot as plt
 import logging
-
 logging.basicConfig(level=logging.INFO)
 import gpflow
 from pilco.models import PILCO
 from pilco.controllers import RbfController, LinearController, CombinedController
-from pilco.controller_utils import LQR
+from pilco.controller_utils import LQR, calculate_ratio
 from pilco.plotting_utils import plot_single_rollout_cycle
-from pilco.rewards import ExponentialReward, L2HarmonicPenalization, CombinedRewards
-from utils import rollout, policy, save_gpflow_obj_to_path
+from pilco.rewards import ExponentialReward
+from utils import rollout, policy, save_gpflow_obj_to_path, load_controller_from_obj
 import os
-
 np.random.seed(0)
-
 
 # NEEDS a different initialisation than the one in gym (change the reset() method),
 # to (m_init, S_init), modifying the gym env
@@ -32,7 +29,6 @@ class myPendulum():
         self.env = gym.make('Pendulum-v0').env
         self.action_space = self.env.action_space
         self.observation_space = self.env.observation_space
-        self.observation_space_dim = self.observation_space.shape
         self.up = initialize_top
 
     def step(self, action):
@@ -40,15 +36,11 @@ class myPendulum():
 
     def reset(self):
         if self.up:
-            self.env.state = [np.pi / 16, 0]
+            self.env.state = [0, 0]
         else:
             self.env.state = [np.pi, 0]
         self.env.last_u = None
         return self.env._get_obs()
-
-    def mutate_with_noise(self, noise_mag, **kwargs):
-        for k, v in kwargs:
-            self.env.__dict__[k] = v + np.random.normal(0, noise_mag)
 
     def render(self):
         self.env.render()
@@ -106,8 +98,7 @@ if __name__ == '__main__':
     state_dim = 3
     control_dim = 1
 
-    controller_linear = LinearController(state_dim=state_dim, control_dim=control_dim, W=W_matrix,
-                                         max_action=max_action)
+    # controller_linear = LinearController(state_dim=state_dim, control_dim=control_dim, W=W_matrix, max_action=max_action)
     # controller = RbfController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf, max_action=max_action)
     controller = CombinedController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf,
                                     controller_location=target, W=W_matrix, max_action=max_action)
@@ -144,26 +135,27 @@ if __name__ == '__main__':
             for i in range(len(X_new)):
                 reward_new[:, 0] = R.compute_reward(X_new[i, None, :-1], 0.001 * np.eye(state_dim))[0]
             total_reward = sum(reward_new)
-            _, _, reward, ratio, intermediary_dict = pilco.predict_and_obtain_intermediates(X_new[0, None, :-1],
-                                                                                            0.001 * S_init, T)
+            _, _, reward, intermediary_dict = pilco.predict_and_obtain_intermediates(X_new[0, None, :-1], 0.001 * S_init, T)
             print("Total ", total_reward, " Predicted: ", reward)
 
             # Plotting internal states of pilco variables
-            intermediate_mean, intermediate_var, intermediate_reward, intermediate_ratio = zip(*intermediary_dict)
+            intermediate_mean, intermediate_var, intermediate_reward = zip(*intermediary_dict)
             intermediate_var = [x.diagonal() for x in intermediate_var]
             intermediate_mean = [x[0] for x in intermediate_mean]
             # Get reward of the last time step
             rollout_reward = intermediate_reward[T - 1][0]
             rollout_reward = np.array(rollout_reward)
             all_rewards.append(rollout_reward[0])
-            # Get linear controller ratio for each timestep of the rollout
-            rollout_ratio = [x for x in intermediate_ratio]
             # Get S of the rollout
             rollout_S = pilco.get_controller().S.read_value().numpy()
-            rollout_S = np.array([[1 / lam for lam in rollout_S]])
-            all_S = np.append(all_S, rollout_S, axis=0)
+            rollout_S_inverse = np.array([[1/lam for lam in rollout_S]])
+            all_S = np.append(all_S, rollout_S_inverse, axis=0)
+            # Get linear controller ratio for each timestep of the rollout
+            realised_states = [x[:state_dim] for x in X_new]
+            rollout_ratio = [calculate_ratio(x, target, rollout_S) for x in realised_states]
 
-            write_to_csv = True if rollouts >= N - 3 else False
+            # write_to_csv = True if rollouts >= N - 3 else False
+            write_to_csv = False
             plot_single_rollout_cycle(intermediate_mean, intermediate_var, [X_new], None, all_rewards, all_S,
                                       rollout_ratio, state_dim, control_dim, T, rollouts, env='swing up',
                                       write_to_csv=write_to_csv)
@@ -172,15 +164,19 @@ if __name__ == '__main__':
             X = np.vstack((X, X_new))
             Y = np.vstack((Y, Y_new))
             pilco.mgpr.set_data((X, Y))
-            save_gpflow_obj_to_path(controller, os.path.join(model_save_dir, f'controller{rollouts}.pkl'))
+            save_gpflow_obj_to_path(controller, os.path.join(model_save_dir, f'swingup_controller{rollouts}.pkl'))
         plt.show()
 
     else:
+        controller_path = os.path.join(model_save_dir, 'controllers', 'swingup_rbf_controller4.pkl')
+        controller = load_controller_from_obj(controller_path)
+
         env.up = True
         states = env.reset()
-        for i in range(100):
+
+        for i in range(200):
             env.render()
-            action = controller_linear.compute_action(tf.reshape(tf.convert_to_tensor(states), (1, -1)),
+            action = controller.compute_action(tf.reshape(tf.convert_to_tensor(states), (1, -1)),
                                                       tf.zeros([state_dim, state_dim], dtype=tf.dtypes.float64),
                                                       squash=True)[0]
             action = action[0, :].numpy()

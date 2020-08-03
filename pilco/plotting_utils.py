@@ -31,8 +31,10 @@ def plot_single_rollout_cycle(state_mean: List[np.ndarray], state_var: List[np.n
     """
     # TODO: Add titles
     save_data = {}
-    width = 3
     total_graphs = internal_state_dim_num + 3
+    width = 3
+    height = math.ceil(total_graphs / width)
+
     mean_states = np.array(state_mean)
     var_states = np.array(state_var)
     rollouts = np.array(rollout)
@@ -45,16 +47,18 @@ def plot_single_rollout_cycle(state_mean: List[np.ndarray], state_var: List[np.n
     if env == 'swing up':
         states_subtitles = [f'cos(\u03B8)', f'sin(\u03B8)', f'\u03B8_dot']
         actions_subtitles = ['torque']
-        S_colors = ['green', 'gold', 'firebrick']
+        S_colors = ['green', 'firebrick', 'gold']
         S_legend = [f'\u03BB_cos(\u03B8)', f'\u03BB_sin(\u03B8)', f'\u03BB_\u03B8_dot']
     elif env == 'cartpole':
         states_subtitles = [f'x', f'x_dot', f'cos(\u03B8)', f'sin(\u03B8)', f'\u03B8_dot']
         actions_subtitles = ['force']
-        S_colors = ['green', 'firebrick', 'dimgray', 'darkmagenta', 'navy']
+        S_colors = ['green', 'firebrick', 'gold', 'darkmagenta', 'navy']
+        S_legend = [f'\u03BB_x', f'\u03BB_x_dot', f'\u03BB_cos(\u03B8)', f'\u03BB_sin(\u03B8)', f'\u03BB_\u03B8_dot']
     elif env == 'mountain car':
         states_subtitles = [f'x', f'x_dot']
         actions_subtitles = ['force']
         S_colors = ['green', 'firebrick']
+        S_legend = [f'\u03BB_x', f'\u03BB_x_dot']
     else:
         logger.error("--- Error: plot_single_rollout_cycle() env incorrect! ---")
     assert len(states_subtitles) == internal_state_dim_num, "--- Error: Change states_subtitles! ---"
@@ -62,7 +66,7 @@ def plot_single_rollout_cycle(state_mean: List[np.ndarray], state_var: List[np.n
 
     plt.style.use('seaborn-darkgrid')
 
-    fig, axs = plt.subplots(math.ceil(total_graphs / width), width, figsize=(9, 6), constrained_layout=True)
+    fig, axs = plt.subplots(height, width, figsize=(9, height * 3), constrained_layout=True)
     fig.suptitle(f'Rollout {rollout_num}', fontsize=16)
     for i in range(total_graphs):
         cur_graph_pos_i, cur_graph_pos_j = i // width, i % width
@@ -98,8 +102,10 @@ def plot_single_rollout_cycle(state_mean: List[np.ndarray], state_var: List[np.n
 
         # Plotting the ratio across timesteps
         if plot_ratio:
-            cur_axis.plot(np.arange(time_steps), rollout_ratio)
+            cur_axis.plot(np.arange(len(rollout_ratio)), rollout_ratio, color='darkorange', label='Actual')
+            cur_axis.set_xlim(0, time_steps)
             cur_axis.set_xlabel('Timesteps')
+            cur_axis.legend()
             cur_axis.set_title(f'Linear Controller Ratio')
 
             save_data['ratio'] = rollout_ratio
@@ -118,8 +124,9 @@ def plot_single_rollout_cycle(state_mean: List[np.ndarray], state_var: List[np.n
 
         # Plotting the rewards across rollouts
         if plot_reward:
-            cur_axis.plot(np.arange(rollout_num + 1), all_rewards)
+            cur_axis.plot(np.arange(rollout_num + 1), all_rewards, label='Predicted')
             cur_axis.set_xlabel('Epochs')
+            cur_axis.legend()
             cur_axis.set_title(f'Reward')
 
             save_data[f'rewards'] = all_rewards
@@ -177,7 +184,7 @@ def plot_interaction_barchart(y_extended, y_pilco):
 
 if __name__ == '__main__':
     # Choose the height of the bars
-    y_extended = [30, 9.6, 30]
-    y_pilco = [30, 17.5, 30]
+    y_extended = [18, 12.0, 6.2]
+    y_pilco = [26, 17.5, 9.6]
 
     plot_interaction_barchart(y_extended, y_pilco)
