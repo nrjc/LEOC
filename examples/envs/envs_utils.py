@@ -124,7 +124,7 @@ class myCartpole():
 
     def reset(self):
         if self.up:
-            self.env.state = [0, 0, 0, 0]
+            self.env.state = [0, 0, np.pi / 180, 0]
         else:
             self.env.state = [0.0, 0.0, np.pi, 0.0]
         self.env.steps_beyond_done = None
@@ -141,8 +141,6 @@ class myCartpole():
             self.env.__dict__[k] = self.env.__dict__[k] * (1 + np.random.uniform(-noise_mag, noise_mag))
 
     def control(self):
-        # Reference http://ctms.engin.umich.edu/CTMS/index.php?example=InvertedPendulum&section=SystemModeling
-        # Reference https://sharpneat.sourceforge.io/research/cart-pole/cart-pole-equations.html
         # M := mass of cart
         # m := mass of pole
         # l := length of pole from end to centre

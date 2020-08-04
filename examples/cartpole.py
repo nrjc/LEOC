@@ -1,19 +1,16 @@
 import numpy as np
-import gym
-import random
 import tensorflow as tf
 from gpflow import set_trainable
 from matplotlib import pyplot as plt
 import logging
 logging.basicConfig(level=logging.INFO)
-import gpflow
-from examples.envs_utils import myCartpole
+from examples.envs.envs_utils import myCartpole
 from pilco.models import PILCO
-from pilco.controllers import RbfController, LinearController, CombinedController
+from pilco.controllers import LinearController, RbfController, CombinedController
 from pilco.controller_utils import LQR, calculate_ratio
 from pilco.plotting_utils import plot_single_rollout_cycle
 from pilco.rewards import ExponentialReward
-from utils import rollout, policy, save_gpflow_obj_to_path
+from utils import rollout, save_gpflow_obj_to_path
 import os
 np.random.seed(0)
 

@@ -1,19 +1,16 @@
 import numpy as np
-import gym
-import random
 import tensorflow as tf
 from gpflow import set_trainable
 from matplotlib import pyplot as plt
 import logging
 logging.basicConfig(level=logging.INFO)
-import gpflow
-from examples.envs_utils import myPendulum
+from examples.envs.envs_utils import myPendulum
 from pilco.models import PILCO
-from pilco.controllers import RbfController, LinearController, CombinedController
+from pilco.controllers import LinearController, RbfController, CombinedController
 from pilco.controller_utils import LQR, calculate_ratio
 from pilco.plotting_utils import plot_single_rollout_cycle
 from pilco.rewards import ExponentialReward
-from utils import rollout, policy, save_gpflow_obj_to_path, load_controller_from_obj
+from utils import rollout, save_gpflow_obj_to_path, load_controller_from_obj
 import os
 np.random.seed(0)
 
@@ -50,7 +47,7 @@ if __name__ == '__main__':
     state_dim = 3
     control_dim = 1
 
-    # controller_linear = LinearController(state_dim=state_dim, control_dim=control_dim, W=W_matrix, max_action=max_action)
+    controller_linear = LinearController(state_dim=state_dim, control_dim=control_dim, W=W_matrix, max_action=max_action)
     # controller = RbfController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf, max_action=max_action)
     controller = CombinedController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf,
                                     controller_location=target, W=W_matrix, max_action=max_action)
