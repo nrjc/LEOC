@@ -5,7 +5,6 @@ import tensorflow as tf
 from gpflow import set_trainable
 from matplotlib import pyplot as plt
 import logging
-
 logging.basicConfig(level=logging.INFO)
 import gpflow
 from pilco.models import PILCO
@@ -15,9 +14,7 @@ from pilco.plotting_utils import plot_single_rollout_cycle
 from pilco.rewards import ExponentialReward
 from utils import rollout, policy, save_gpflow_obj_to_path, load_controller_from_obj
 import os
-
 np.random.seed(0)
-
 
 # NEEDS a different initialisation than the one in gym (change the reset() method),
 # to (m_init, S_init), modifying the gym env
@@ -32,7 +29,6 @@ class myPendulum():
         self.env = gym.make('Pendulum-v0').env
         self.action_space = self.env.action_space
         self.observation_space = self.env.observation_space
-        self.observation_space_dim = self.observation_space.shape
         self.up = initialize_top
 
     def step(self, action):
@@ -45,10 +41,6 @@ class myPendulum():
             self.env.state = [np.pi, 0]
         self.env.last_u = None
         return self.env._get_obs()
-
-    def mutate_with_noise(self, noise_mag, **kwargs):
-        for k, v in kwargs:
-            self.env.__dict__[k] = v + np.random.normal(0, noise_mag)
 
     def render(self):
         self.env.render()
@@ -106,8 +98,7 @@ if __name__ == '__main__':
     state_dim = 3
     control_dim = 1
 
-    controller_linear = LinearController(state_dim=state_dim, control_dim=control_dim, W=W_matrix,
-                                         max_action=max_action)
+    # controller_linear = LinearController(state_dim=state_dim, control_dim=control_dim, W=W_matrix, max_action=max_action)
     # controller = RbfController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf, max_action=max_action)
     controller = CombinedController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf,
                                     controller_location=target, W=W_matrix, max_action=max_action)
