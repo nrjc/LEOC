@@ -44,13 +44,19 @@ Interaction time could be adjusted by toggling the timesteps `T` and number of e
 Interaction times shown in `Figure 5` are based on the extended RBF controller and RBF controller (currently commented out) run in the three different environments. 
 
 #### Gain and Phase Margins
-The gain and phase margins presented in `Table 2` are calculated based on the models set up in 
+The gain and phase margins presented in `Table 2` are calculated based on the models in
+```
+examples/matlab/swingup_linear.slx
+examples/matlab/swingup_rbf.slx
+examples/matlab/swingup_extended.slx
+```
+These contain the linearised version of the Pendulum Swing-up environment about the unstable equilibrium point for the different types of controllers.  
+
+To run the file, a matlab installation is required, and setting the working directory to be `examples/matlab` and running the following script should yield margins.
 ```
 examples/matlab/run_margins.m
 ```
-These contains the linearised version of the swingup environment about the unstable equilibrium point for the linear and the rbf controllers.  
 
-To run the file, a matlab installation is required, and setting the working directory to be examples/matlab and running the script should yield margins for both systems.
 #### Further stability analysis
 The data from the stability analysis in `Figure 6` could be obtained by running the following script
 ```
