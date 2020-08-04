@@ -48,7 +48,9 @@ The gain and phase margins presented in `Table 2` are calculated based on the mo
 ```
 examples/matlab/run_margins.m
 ```
+These contains the linearised version of the swingup environment about the unstable equilibrium point for the linear and the rbf controllers.  
 
+To run the file, a matlab installation is required, and setting the working directory to be examples/matlab and running the script should yield margins for both systems.
 #### Further stability analysis
 The data from the stability analysis in `Figure 6` could be obtained by running the following script
 ```
