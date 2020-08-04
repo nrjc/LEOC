@@ -7,59 +7,15 @@ from matplotlib import pyplot as plt
 import logging
 logging.basicConfig(level=logging.INFO)
 import gpflow
+from examples.envs_utils import myMountainCar
 from pilco.models import PILCO
 from pilco.controllers import RbfController, LinearController, CombinedController
 from pilco.controller_utils import LQR, calculate_ratio
 from pilco.plotting_utils import plot_single_rollout_cycle
 from pilco.rewards import ExponentialReward
 from utils import rollout, policy, save_gpflow_obj_to_path
-from examples.envs.mountain_car_env import Continuous_MountainCarEnv as MountainCarEnv
 import os
 np.random.seed(0)
-
-class myMountainCar():
-    def __init__(self, initialize_top=False):
-        self.env = MountainCarEnv()
-        self.action_space = self.env.action_space
-        self.observation_space = self.env.observation_space
-        self.up = initialize_top
-
-    def step(self, action):
-        return self.env.step(action)
-
-    def reset(self):
-        if self.up:
-            self.env.state = [-np.pi / 16, 0.0]
-        else:
-            self.env.state = [-np.pi, 0.0]
-        self.env.steps_beyond_done = None
-        return self.env._get_obs()
-
-    def render(self):
-        self.env.render()
-
-    def close(self):
-        self.env.close()
-
-    def control(self):
-        # m := mass of car
-        # b := coefficient of friction of mountain. 'MountainCarEnv' env is frictionless
-        b = 0
-        g = self.env.gravity
-        m = self.env.masscart
-
-        # using x to approximate sin(x)
-        A = np.array([[0, 1],
-                      [g, -b / m]])
-
-        B = np.array([[0],
-                      [-1 / m]])
-
-        C = np.array([[1, 0]])
-
-        Q = np.diag([2.0, 0.3])
-
-        return A, B, C, Q
 
 
 if __name__ == '__main__':
@@ -90,9 +46,9 @@ if __name__ == '__main__':
     control_dim = 1
 
     controller_linear = LinearController(state_dim=state_dim, control_dim=control_dim, W=W_matrix, max_action=max_action)
-    controller = RbfController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf, max_action=max_action)
-    # controller = CombinedController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf,
-    #                                 controller_location=target, W=W_matrix, max_action=max_action)
+    # controller = RbfController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf, max_action=max_action)
+    controller = CombinedController(state_dim=state_dim, control_dim=control_dim, num_basis_functions=bf,
+                                    controller_location=target, W=W_matrix, max_action=max_action)
     R = ExponentialReward(state_dim=state_dim, t=target, W=weights)
 
     if not test_linear_control:
