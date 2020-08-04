@@ -7,73 +7,15 @@ from matplotlib import pyplot as plt
 import logging
 logging.basicConfig(level=logging.INFO)
 import gpflow
+from examples.envs_utils import myCartpole
 from pilco.models import PILCO
 from pilco.controllers import RbfController, LinearController, CombinedController
 from pilco.controller_utils import LQR, calculate_ratio
 from pilco.plotting_utils import plot_single_rollout_cycle
 from pilco.rewards import ExponentialReward
 from utils import rollout, policy, save_gpflow_obj_to_path
-from examples.envs.cartpole_env import CartPoleEnv
 import os
 np.random.seed(0)
-
-
-class myCartpole():
-    def __init__(self, initialize_top=False):
-        self.env = CartPoleEnv()
-        self.action_space = self.env.action_space
-        self.observation_space = self.env.observation_space
-        self.up = initialize_top
-
-    def step(self, action):
-        return self.env.step(action)
-
-    def reset(self):
-        if self.up:
-            self.env.state = [0, -1, 0, 2]
-        else:
-            self.env.state = [0.0, 0.0, np.pi, 0.0]
-        self.env.steps_beyond_done = None
-        return self.env._get_obs()
-
-    def render(self):
-        self.env.render()
-
-    def close(self):
-        self.env.close()
-
-    def control(self):
-        # Reference http://ctms.engin.umich.edu/CTMS/index.php?example=InvertedPendulum&section=SystemModeling
-        # Reference https://sharpneat.sourceforge.io/research/cart-pole/cart-pole-equations.html
-        # M := mass of cart
-        # m := mass of pole
-        # l := length of pole from end to centre
-        # b := coefficient of friction of cart. 'CartPoleEnv' env is frictionless
-        b = 0
-        M = self.env.masscart
-        m = self.env.masspole
-        l = self.env.length
-        g = self.env.gravity
-        I = 1 / 3 * m * (l ** 2)
-        p = I * (M + m) + M * m * (l ** 2)
-
-        # using x to approximate sin(x) and 1 to approximate cos(x)
-        A = np.array([[0,                           1,                            0, 0],
-                      [0, -(I + m * (l ** 2)) * b / p,  (m ** 2) * g * (l ** 2) / p, 0],
-                      [0,                           0,                            0, 1],
-                      [0,             (m * l * b) / p,      m * g * l * (M + m) / p, 0]])
-
-        B = np.array([[0],
-                      [-(I + m * (l ** 2)) / p],
-                      [0],
-                      [m * l / p]])
-
-        C = np.array([[1, 0, 0, 0],
-                      [0, 0, 1, 0]])
-
-        Q = np.diag([2.0, .3, 2.0, 0.3])
-
-        return A, B, C, Q
 
 
 if __name__ == '__main__':

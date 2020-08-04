@@ -7,6 +7,7 @@ from matplotlib import pyplot as plt
 import logging
 logging.basicConfig(level=logging.INFO)
 import gpflow
+from examples.envs_utils import myPendulum
 from pilco.models import PILCO
 from pilco.controllers import RbfController, LinearController, CombinedController
 from pilco.controller_utils import LQR, calculate_ratio
@@ -22,55 +23,6 @@ np.random.seed(0)
 # Introduces subsampling with the parameter SUBS and modified rollout function
 # Introduces priors for better conditioning of the GP model
 # Uses restarts
-
-
-class myPendulum():
-    def __init__(self, initialize_top=False):
-        self.env = gym.make('Pendulum-v0').env
-        self.action_space = self.env.action_space
-        self.observation_space = self.env.observation_space
-        self.up = initialize_top
-
-    def step(self, action):
-        return self.env.step(action)
-
-    def reset(self):
-        if self.up:
-            self.env.state = [np.pi / 16, 0]
-        else:
-            self.env.state = [np.pi, 0]
-        self.env.last_u = None
-        return self.env._get_obs()
-
-    def render(self):
-        self.env.render()
-
-    def close(self):
-        self.env.close()
-
-    def control(self):
-        # m := mass of pendulum
-        # l := length of pendulum from end to centre
-        # b := coefficient of friction of pendulum
-        b = 0
-        g = self.env.g
-        m = self.env.m
-        l = self.env.l / 2
-        I = 1 / 3 * m * (l ** 2)
-        p = m * (l ** 2) + I
-
-        # using x to approximate sin(x)
-        A = np.array([[0, 1],
-                      [m * l * g / p, -b / p]])
-
-        B = np.array([[0],
-                      [-1 / p]])
-
-        C = np.array([[1, 0]])
-
-        Q = np.diag([2.0, 2.0])
-
-        return A, B, C, Q
 
 
 if __name__ == '__main__':
