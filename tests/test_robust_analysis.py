@@ -82,20 +82,17 @@ class TestRobustNess(unittest.TestCase):
                                              controller_location=target, W=W_matrix, max_action=max_action)
         self.lin_controller = LinearController(state_dim=state_dim, control_dim=control_dim, W=W_matrix,
                                          max_action=max_action)
-        self.rbf_controller = load_controller_from_obj('data/swingup/rbf/swingup_rbf_controller4.pkl')
+        # self.rbf_controller = load_controller_from_obj('data/swingup/rbf/swingup_rbf_controller4.pkl')
         self.env = env
 
     def test_percentage_stable(self):
-        percentage_stable(self.controller, self.env, [(0.5, 1.2), (-np.pi / 4, np.pi / 4), (-1, 1)], ['g', 'm', 'l'], 0.2)
+        percentage_stable(self.controller, self.env, [(0.5, 1.2), (-np.pi / 4, np.pi / 4), (-1, 1)], ['g', 'm', 'l'], 0.2, 1)
 
     def test_stable_across_noise(self):
         p_extended = analyze_robustness(self.controller, self.env, [(0.5, 1.2), (-.0192, .0192), (-1, 1)], ['g', 'm', 'l'],
-                          np.asarray([0.1, 0.3, 0.5, 0.7, 1.0]))
+                          np.asarray([30]))
         p_linear = analyze_robustness(self.lin_controller, self.env, [(0.5, 1.2), (-.0192, .0192), (-1, 1)], ['g', 'm', 'l'],
-                          np.asarray([0.1, 0.3, 0.5, 0.7, 1.0]))
-        p_rbf = analyze_robustness(self.rbf_controller, self.env, [(0.5, 1.2), (-.0192, .0192), (-1, 1)], ['g', 'm', 'l'],
-                          np.asarray([0.1, 0.3, 0.5, 0.7, 1.0]))
-        pass
+                          np.asarray([30]))
 
 if __name__ == '__main__':
     unittest.main()
