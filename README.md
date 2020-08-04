@@ -2,53 +2,62 @@
 [![Build Status](https://travis-ci.org/nrontsis/PILCO.svg?branch=master)](https://travis-ci.org/nrontsis/PILCO)
 [![codecov](https://codecov.io/gh/nrontsis/PILCO/branch/master/graph/badge.svg)](https://codecov.io/gh/nrontsis/PILCO)
 
-A modern \& clean implementation of the [PILCO](https://ieeexplore.ieee.org/abstract/document/6654139/) Algorithm in `TensorFlow v2`.
+This folder contains an implementation of the paper `Extended Radial Basis Function Controller for Reinforcement Learning` submitted to the 4th Conference on Robot Learning (CoRL 2020).
 
-Unlike PILCO's [original implementation](http://mlg.eng.cam.ac.uk/pilco/) which was written as a self-contained package of `MATLAB`, this repository aims to provide a clean implementation by heavy use of modern machine learning libraries.
+The implementation is based on the [PILCO](https://ieeexplore.ieee.org/abstract/document/6654139/) framework (as per Section 2 Method in the paper) and written in `Python 3`. 
+`TensorFlow v2` and [`GPflow v2`](https://github.com/GPflow/GPflow) have also been used for optimisation and Gaussian Process Regression respectively.
 
-In particular, we use `TensorFlow v2` to avoid the need for hardcoded gradients and scale to GPU architectures. Moreover, we use [`GPflow v2`](https://github.com/GPflow/GPflow) for Gaussian Process Regression.
+The rest of this document brings the reader through on how to set up the implementation and reproduce some of the results in the paper.
 
-The core functionality is tested against the original `MATLAB` implementation.
 ## Installation
-1. Install venv
+1.Install venv
 ```bash
 virtualenv -p python3 venv
 source venv/bin/activate
 ```
-2. Install requirements
+2.Install requirements
 ```bash
 pip install -r requirements.txt
 python setup.py develop
 ```
-3. You might also need to install openai gym
+3.You might also need to install openai gym
 ```bash
 pip install gym
 ```
-4. You might also need to install mujoco [click here](https://www.roboti.us/index.html)
-5. In the case that mujoco and mujoco-py fail to build on macos, change the MacOS SDK to 10.14.sdk
+
 ## Example of usage
-Before using `PILCO` you have to install it by running:
-```
-git clone https://github.com/nrontsis/PILCO && cd PILCO
-python setup.py develop
-```
-It is recommended to install everything in a fresh conda environment with `python>=3.7`
+Once these dependecies have been installed, one can run the code to reproduce the results presented in the paper. 
 
-The examples included in this repo use [`OpenAI gym 0.15.3`](https://github.com/openai/gym#installation) and [`mujoco-py 2.0.2.7`](https://github.com/openai/mujoco-py#install-mujoco). Theses dependecies should be installed manually. Then, you can run one of the examples as follows
+#### Main experiment
+The main experiment of the paper trains an extended RBF controller that comprises of an engineered linear controller and a series of RBF controllers.
+This could be done by running the python scripts corresponding to the three environments, under the `examples` folder. 
+
+For instance, to obtain a trained controller and a plot similar to that of `Figure 4` in the paper, one could run
 ```
-python examples/inverted_pendulum.py
+python examples/swing_up.py
+```
+Analogous commands could produce trained controllers in the `cartpole` or `mountain_car` environments.
+
+#### Interaction time
+Interaction time could be adjusted by toggling the timesteps `T` and number of epochs `N` parameters in each of the example scripts.
+
+Interaction times shown in `Figure 5` are based on the extended RBF controller and RBF controller (currently commented out) run in the three different environments. 
+
+#### Gain and Phase Margins
+The gain and phase margins presented in `Table 2` are calculated based on the models set up in 
+```
+examples/matlab/run_margins.m
 ```
 
-## Example Extension: Safe PILCO
-As an example of the extensibility of the framework, we include in the folder `safe_pilco_extension` an extension of the standard PILCO algorithm that takes safety constraints (defined on the environment's state space) into account as in [https://arxiv.org/abs/1712.05556](https://arxiv.org/pdf/1712.05556.pdf). The `safe_swimmer_run.py` and `safe_cars_run.py` in the `examples` folder demonstrate the use of this extension.
+#### Further stability analysis
+The data from the stability analysis in `Figure 6` could be obtained by running the following script
+```
+python tests/test_robust_analysis.py 
+```
+Please do note however that the script is currently set up to test an untrained controller. The user might want to test a trained controller by loading it using the function `load_controller_from_obj`.
 
 ## Credits:
 
-The following people have been involved in the development of this package:
-* [Nikitas Rontsis](https://github.com/nrontsis)
-* [Kyriakos Polymenakos](https://github.com/kyr-pol/)
+This implementation is forked off an existing [PILCO repo](https://github.com/nrontsis/PILCO).
 
-## References
-
-See the following publications for a description of the algorithm: [1](https://ieeexplore.ieee.org/abstract/document/6654139/), [2](http://mlg.eng.cam.ac.uk/pub/pdf/DeiRas11.pdf), 
-[3](https://pdfs.semanticscholar.org/c9f2/1b84149991f4d547b3f0f625f710750ad8d9.pdf)
+Credits also go out to OpenAI for and its [gym environments](https://github.com/openai/gym/tree/master/gym/envs/classic_control) for making testing possible.
