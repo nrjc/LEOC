@@ -1,6 +1,4 @@
-# Probabilistic Inference for Learning Control (PILCO)
-[![Build Status](https://travis-ci.org/nrontsis/PILCO.svg?branch=master)](https://travis-ci.org/nrontsis/PILCO)
-[![codecov](https://codecov.io/gh/nrontsis/PILCO/branch/master/graph/badge.svg)](https://codecov.io/gh/nrontsis/PILCO)
+# Extended Radial Basis Function Controller for Reinforcement Learning
 
 This folder contains an implementation of the paper `Extended Radial Basis Function Controller for Reinforcement Learning` submitted to the 4th Conference on Robot Learning (CoRL 2020).
 
