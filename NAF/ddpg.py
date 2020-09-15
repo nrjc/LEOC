@@ -76,7 +76,7 @@ class DDPG(object):
         self.agent.initialize()
         self.policy_saver = PolicySaver(self.agent.collect_policy, batch_size=None)
 
-    def compute_avg_return(self, eval_env, num_episodes=10):
+    def compute_avg_return(self, eval_env, num_episodes=5):
         total_return = 0.0
         for _ in range(num_episodes):
 

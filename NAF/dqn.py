@@ -25,7 +25,7 @@ from tf_agents.policies.policy_saver import PolicySaver
 tf.compat.v1.enable_v2_behavior()
 
 
-class NAF(object):
+class DQN(object):
 
     def __init__(self, train_env, learning_rate, fc_layer_params=(100,)):
         self.train_env = train_env
@@ -48,7 +48,7 @@ class NAF(object):
     def get_eval_action(self, time_step):
         return self.agent.eval_policy.action(time_step)
 
-    def compute_avg_return(self, eval_env, num_episodes=10):
+    def compute_avg_return(self, eval_env, num_episodes=5):
         total_return = 0.0
         for _ in range(num_episodes):
 
@@ -67,8 +67,8 @@ class NAF(object):
 
 class ReplayBuffer(object):
 
-    def __init__(self, naf, train_env, replay_buffer_max_length):
-        self.agent = naf.agent
+    def __init__(self, DQN, train_env, replay_buffer_max_length):
+        self.agent = DQN.agent
         self.train_env = train_env
         self.buffer = tf_uniform_replay_buffer.TFUniformReplayBuffer(data_spec=self.agent.collect_data_spec,
                                                                      batch_size=self.train_env.batch_size,
@@ -94,7 +94,7 @@ class ReplayBuffer(object):
         return iterator
 
 
-def train_agent(naf,
+def train_agent(DQN,
                 replay_buffer,
                 train_env,
                 eval_env,
@@ -102,38 +102,38 @@ def train_agent(naf,
                 num_eval_episodes,
                 log_interval):
     # (Optional) Optimize by wrapping some of the code in a graph using TF function.
-    naf.agent.train = common.function(naf.agent.train)
+    DQN.agent.train = common.function(DQN.agent.train)
 
     # Reset the train step
-    naf.train_step_counter.assign(0)
+    DQN.train_step_counter.assign(0)
 
     # Evaluate the agent's policy once before training.
-    avg_return = naf.compute_avg_return(eval_env)
+    avg_return = DQN.compute_avg_return(eval_env)
     returns = [avg_return]
 
     for _ in range(num_iterations):
 
         # Collect a few steps using collect_policy and save to the replay buffer.
         for _ in range(collect_steps_per_iteration):
-            replay_buffer.collect_step(train_env, naf.agent.collect_policy)
+            replay_buffer.collect_step(train_env, DQN.agent.collect_policy)
 
         # Sample a batch of data from the buffer and update the agent's network.
         iterator = replay_buffer.get_dataset()
         experience, unused_info = next(iterator)
-        train_loss = naf.agent.train(experience).loss
+        train_loss = DQN.agent.train(experience).loss
 
-        naf.policy_saver.save(f'policy_0')
-        step = naf.train_step_counter.numpy()
+        DQN.policy_saver.save(f'policy_0')
+        step = DQN.train_step_counter.numpy()
 
         if step % log_interval == 0:
             print('step = {0}: loss = {1}'.format(step, train_loss))
 
         if step % eval_interval == 0:
-            avg_return = naf.compute_avg_return(eval_env)
+            avg_return = DQN.compute_avg_return(eval_env)
             print('step = {0}: Average Return = {1}'.format(step, avg_return))
             returns.append(avg_return)
             # utils_plot(num_iterations, eval_interval, returns)
-            naf.policy_saver.save(f'policy_{step // eval_interval}')
+            DQN.policy_saver.save(f'policy_{step // eval_interval}')
 
     print(f'Finished training for {num_iterations} iterations')
 
@@ -188,12 +188,12 @@ if __name__ == "__main__":
     train_env = tf_py_environment.TFPyEnvironment(train_py_env)
     eval_env = tf_py_environment.TFPyEnvironment(eval_py_env)
 
-    myNAFagent = NAF(train_env, learning_rate)
-    myReplayBuffer = ReplayBuffer(myNAFagent, train_env, replay_buffer_max_length)
+    myDQNagent = DQN(train_env, learning_rate)
+    myReplayBuffer = ReplayBuffer(myDQNagent, train_env, replay_buffer_max_length)
 
     random_policy = random_tf_policy.RandomTFPolicy(train_env.time_step_spec(), train_env.action_spec())
     myReplayBuffer.collect_data(train_env, random_policy, steps=100)
-    train_agent(myNAFagent,
+    train_agent(myDQNagent,
                 myReplayBuffer,
                 train_env,
                 eval_env,
