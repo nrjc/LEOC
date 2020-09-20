@@ -12,7 +12,6 @@ python tf_agents/agents/ddpg/examples/v2/train_eval.py \
 from __future__ import absolute_import, division, print_function
 
 import os
-import time
 import numpy as np
 from absl import app, flags, logging
 
@@ -20,11 +19,8 @@ import tensorflow as tf
 from tf_agents.agents import DdpgAgent
 from tf_agents.agents.ddpg import actor_network, critic_network
 from tf_agents.drivers import dynamic_step_driver
-from tf_agents.environments import suite_gym, tf_py_environment
-from tf_agents.eval import metric_utils
 from tf_agents.metrics import tf_metrics
-from tf_agents.networks import q_network
-from tf_agents.policies import random_tf_policy, policy_saver
+from tf_agents.policies import policy_saver
 from tf_agents.replay_buffers import tf_uniform_replay_buffer
 from tf_agents.trajectories import trajectory
 from tf_agents.utils import common
@@ -39,9 +35,36 @@ flags.DEFINE_multi_string('gin_param', None, 'Gin binding parameters.')
 FLAGS = flags.FLAGS
 
 
+class LinearController(tf.Module):
+    def __init__(self, state_dim, control_dim, max_action=1.0, W=None, b=None, name=None):
+        super().__init__(name=name)
+        if W is None:
+            self.w = tf.Variable(tf.random.normal([control_dim, state_dim]), trainable=True, name='W')
+            self.b = tf.Variable(tf.zeros([control_dim]), trainable=False, name='b')
+        else:
+            self.W = tf.Variable(W, trainable=False, name='W')
+            self.b = tf.Variable(tf.zeros([control_dim]), trainable=False, name='b')
+        self.max_action = max_action
+
+    def compute_action(self, x):
+        '''
+        Simple affine action:  u <- W(x_t) + b
+        IN: state (x)
+        OUT: action (u)
+        '''
+        u = x @ tf.transpose(self.W) + self.b  # mean output
+        return u
+
+    def randomize(self):
+        mean = 0
+        sigma = 1
+        self.W.assign(mean + sigma * np.random.normal(size=self.W.shape))
+        self.b.assign(mean + sigma * np.random.normal(size=self.b.shape))
+
+
 class DDPG(object):
 
-    def __init__(self, train_env):
+    def __init__(self, train_env, linear_controller=None):
         self.train_env = train_env
         self.actor_learning_rate = 1e-4
         self.critic_learning_rate = 1e-3
@@ -95,6 +118,7 @@ class DDPG(object):
             train_step_counter=self.train_step_counter,
             name='DDPG_agent')
         self.agent.initialize()
+        self.linear_controller = linear_controller
         self.policy_saver = policy_saver.PolicySaver(self.agent.collect_policy, batch_size=None)
 
     def compute_avg_return(self, eval_env, num_episodes=5):
@@ -159,8 +183,8 @@ class ReplayBuffer(object):
         return iterator
 
 
-def train_agent(ddpg, replay_buffer, eval_env, num_iterations, initial_collect_steps, collect_steps_per_iteration,
-                num_eval_episodes, log_interval):
+def train_agent(ddpg, replay_buffer, eval_env, num_iterations, initial_collect_steps=1000,
+                collect_steps_per_iteration=1, num_eval_episodes=5, log_interval=200, eval_interval=1000):
     # (Optional) Optimize by wrapping some of the code in a graph using TF function.
     ddpg.agent.train = common.function(ddpg.agent.train)
 
@@ -171,6 +195,7 @@ def train_agent(ddpg, replay_buffer, eval_env, num_iterations, initial_collect_s
     avg_return = ddpg.compute_avg_return(eval_env)
     returns = [avg_return]
 
+    # Collect some initial experience
     replay_buffer.collect_data(steps=initial_collect_steps)
 
     for _ in range(num_iterations):
@@ -197,34 +222,3 @@ def train_agent(ddpg, replay_buffer, eval_env, num_iterations, initial_collect_s
             ddpg.policy_saver.save(f'policy_{step // eval_interval}')
 
     print(f'Finished training for {num_iterations} iterations')
-
-
-if __name__ == "__main__":
-    num_iterations = 20000  # @param {type:"integer"}
-    initial_collect_steps = 1000  # @param {type:"integer"}
-    collect_steps_per_iteration = 1  # @param {type:"integer"}
-    replay_buffer_capacity = 100000  # @param {type:"integer"}
-    batch_size = 64  # @param {type:"integer"}
-    learning_rate = 1e-3  # @param {type:"number"}
-    log_interval = 200  # @param {type:"integer"}
-    num_eval_episodes = 5  # @param {type:"integer"}
-    eval_interval = 1000  # @param {type:"integer"}
-
-    env_name = 'Pendulum-v0'
-    train_py_env = suite_gym.load(env_name)
-    eval_py_env = suite_gym.load(env_name)
-    train_env = tf_py_environment.TFPyEnvironment(train_py_env)
-    eval_env = tf_py_environment.TFPyEnvironment(eval_py_env)
-
-    myDDPGagent = DDPG(train_env)
-    myReplayBuffer = ReplayBuffer(myDDPGagent, train_env, replay_buffer_capacity, initial_collect_steps,
-                                  collect_steps_per_iteration)
-
-    random_policy = random_tf_policy.RandomTFPolicy(train_env.time_step_spec(), train_env.action_spec())
-    train_agent(myDDPGagent,
-                myReplayBuffer,
-                eval_env,
-                num_iterations,
-                initial_collect_steps,
-                num_eval_episodes,
-                log_interval)
