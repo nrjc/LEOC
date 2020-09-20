@@ -4,10 +4,10 @@ from gpflow import set_trainable
 from matplotlib import pyplot as plt
 import logging
 logging.basicConfig(level=logging.INFO)
-from examples.envs.envs_utils import myMountainCar
+from pilco.envs_utils import myCartpole
 from pilco.models import PILCO
-from pilco.controllers import LinearController, RbfController, CombinedController
-from pilco.controller_utils import LQR
+from pilco.controllers import LinearController, CombinedController
+from pilco.controller_utils import LQR, calculate_ratio
 from pilco.plotting_utils import plot_single_rollout_cycle
 from pilco.rewards import ExponentialReward
 from utils import rollout, save_gpflow_obj_to_path
@@ -19,27 +19,27 @@ if __name__ == '__main__':
     # Define params
     test_linear_control = False
     SUBS = 3
-    bf = 30
+    bf = 60
     maxiter = 50
-    max_action = 3.0
-    T = 50
+    max_action = 2.5
+    T = 40
     J = 5
-    N = 8
+    N = 12
     restarts = 2
     model_save_dir = './'
 
-    # States := [x, x_dot]
-    target = np.array([0.0, 0.0])
-    weights = np.diag([2.0, 0.5])
-    m_init = np.reshape([-np.pi, 0.0], (1, 2))
-    S_init = np.diag([0.01, 0.01])
+    # States := [x, x_dot, cos(theta), sin(theta), theta_dot]
+    target = np.array([0.0, 0.0, 1.0, 0.0, 0.0])
+    weights = np.diag([2.0, 0.3, 2.0, 2.0, 0.3])
+    m_init = np.reshape([0.0, 0.0, -1.0, 0.0, 0.0], (1, 5))
+    S_init = np.diag([0.01, 0.01, 0.01, 0.05, 0.01])
 
     # Set up objects and variables
-    env = myMountainCar(False)
+    env = myCartpole(False)
     A, B, C, Q = env.control()
-    W_matrix = LQR().get_W_matrix(A, B, Q, env='mountain car')
+    W_matrix = LQR().get_W_matrix(A, B, Q, env='cartpole')
 
-    state_dim = 2
+    state_dim = 5 # state_dim = env.observation_space.shape[0]
     control_dim = 1
 
     controller_linear = LinearController(state_dim=state_dim, control_dim=control_dim, W=W_matrix, max_action=max_action)
@@ -89,38 +89,37 @@ if __name__ == '__main__':
             rollout_reward = intermediate_reward[T - 1][0]
             rollout_reward = np.array(rollout_reward)
             all_rewards.append(rollout_reward[0])
-            # # Get S of the rollout
-            # rollout_S = pilco.get_controller().S.read_value().numpy()
-            # rollout_S_inverse = np.array([[1 / lam for lam in rollout_S]])
-            # all_S = np.append(all_S, rollout_S_inverse, axis=0)
-            # # Get linear controller ratio for each timestep of the rollout
-            # realised_states = [x[:state_dim] for x in X_new]
-            # rollout_ratio = [calculate_ratio(x, target, rollout_S) for x in realised_states]
+            # Get S of the rollout
+            rollout_S = pilco.get_controller().S.read_value().numpy()
+            rollout_S_inverse = np.array([[1 / lam for lam in rollout_S]])
+            all_S = np.append(all_S, rollout_S_inverse, axis=0)
+            # Get linear controller ratio for each timestep of the rollout
+            realised_states = [x[:state_dim] for x in X_new]
+            rollout_ratio = [calculate_ratio(x, target, rollout_S) for x in realised_states]
 
             # write_to_csv = True if rollouts >= N - 3 else False
             write_to_csv = False
-            rollout_ratio, all_S = None, None
             plot_single_rollout_cycle(intermediate_mean, intermediate_var, [X_new], None, all_rewards, all_S,
-                                      rollout_ratio, state_dim, control_dim, T, rollouts, env='mountain car',
+                                      rollout_ratio, state_dim, control_dim, T, rollouts, env='cartpole',
                                       write_to_csv=write_to_csv)
+
             # Update dataset
             X = np.vstack((X, X_new))
             Y = np.vstack((Y, Y_new))
             pilco.mgpr.set_data((X, Y))
-            save_gpflow_obj_to_path(controller, os.path.join(model_save_dir, f'mountaincar_controller{rollouts}.pkl'))
-
+            save_gpflow_obj_to_path(controller, os.path.join(model_save_dir, f'cartpole_controller{rollouts}.pkl'))
         plt.show()
 
     else:
         env.up = True
         states = env.reset()
-        for i in range(200):
+        for i in range(500):
             env.render()
             action = controller_linear.compute_action(tf.reshape(tf.convert_to_tensor(states), (1, -1)),
                                                       tf.zeros([state_dim, state_dim], dtype=tf.dtypes.float64),
                                                       squash=False)[0]
             action = action[0, :].numpy()
             states, _, _, _ = env.step(action)
-            print(f'Step {i}: action={action}; x={states[0]:.2f}; x_dot={states[1]:.3f}')
+            print(f'Step: {i}, action: {action}')
 
     env.close()

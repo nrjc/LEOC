@@ -4,22 +4,15 @@ from gpflow import set_trainable
 from matplotlib import pyplot as plt
 import logging
 logging.basicConfig(level=logging.INFO)
-from examples.envs.envs_utils import myPendulum
+from pilco.envs_utils import myMountainCar
 from pilco.models import PILCO
-from pilco.controllers import LinearController, RbfController, CombinedController
-from pilco.controller_utils import LQR, calculate_ratio
+from pilco.controllers import LinearController, CombinedController
+from pilco.controller_utils import LQR
 from pilco.plotting_utils import plot_single_rollout_cycle
 from pilco.rewards import ExponentialReward
-from utils import rollout, save_gpflow_obj_to_path, load_controller_from_obj
+from utils import rollout, save_gpflow_obj_to_path
 import os
 np.random.seed(0)
-
-# NEEDS a different initialisation than the one in gym (change the reset() method),
-# to (m_init, S_init), modifying the gym env
-
-# Introduces subsampling with the parameter SUBS and modified rollout function
-# Introduces priors for better conditioning of the GP model
-# Uses restarts
 
 
 if __name__ == '__main__':
@@ -28,23 +21,25 @@ if __name__ == '__main__':
     SUBS = 3
     bf = 30
     maxiter = 50
-    max_action = 2.0
-    target = np.array([1.0, 0.0, 0.0])
-    weights = np.diag([2.0, 2.0, 0.3])
-    m_init = np.reshape([-1.0, 0, 0.0], (1, 3))
-    S_init = np.diag([0.01, 0.05, 0.01])
-    T = 40
-    J = 4
+    max_action = 3.0
+    T = 50
+    J = 5
     N = 8
     restarts = 2
     model_save_dir = './'
 
-    # Set up objects and variables
-    env = myPendulum(False)
-    A, B, C, Q = env.control()
-    W_matrix = LQR().get_W_matrix(A, B, Q, env='swing up')
+    # States := [x, x_dot]
+    target = np.array([0.0, 0.0])
+    weights = np.diag([2.0, 0.5])
+    m_init = np.reshape([-np.pi, 0.0], (1, 2))
+    S_init = np.diag([0.01, 0.01])
 
-    state_dim = 3
+    # Set up objects and variables
+    env = myMountainCar(False)
+    A, B, C, Q = env.control()
+    W_matrix = LQR().get_W_matrix(A, B, Q, env='mountain car')
+
+    state_dim = 2
     control_dim = 1
 
     controller_linear = LinearController(state_dim=state_dim, control_dim=control_dim, W=W_matrix, max_action=max_action)
@@ -55,15 +50,14 @@ if __name__ == '__main__':
 
     if not test_linear_control:
         # Initial random rollouts to generate a dataset
-        X, Y, _, _ = rollout(env, None, timesteps=T, random=True, SUBS=SUBS, verbose=False)
+        X, Y, _, _ = rollout(env=env, pilco=None, timesteps=T, random=True, SUBS=SUBS, render=True, verbose=False)
         for i in range(1, J):
-            X_, Y_, _, _ = rollout(env, None, timesteps=T, random=True, SUBS=SUBS, verbose=False)
+            X_, Y_, _, _ = rollout(env=env, pilco=None, timesteps=T, random=True, SUBS=SUBS, render=True, verbose=False)
             X = np.vstack((X, X_))
             Y = np.vstack((Y, Y_))
-
         pilco = PILCO((X, Y), controller=controller, horizon=T, reward=R, m_init=m_init, S_init=S_init)
 
-        # for numerical stability
+        # for numerical stability, we can set the likelihood variance parameters of the GP models
         for model in pilco.mgpr.models:
             model.likelihood.variance.assign(0.001)
             set_trainable(model.likelihood.variance, False)
@@ -95,41 +89,38 @@ if __name__ == '__main__':
             rollout_reward = intermediate_reward[T - 1][0]
             rollout_reward = np.array(rollout_reward)
             all_rewards.append(rollout_reward[0])
-            # Get S of the rollout
-            rollout_S = pilco.get_controller().S.read_value().numpy()
-            rollout_S_inverse = np.array([[1/lam for lam in rollout_S]])
-            all_S = np.append(all_S, rollout_S_inverse, axis=0)
-            # Get linear controller ratio for each timestep of the rollout
-            realised_states = [x[:state_dim] for x in X_new]
-            rollout_ratio = [calculate_ratio(x, target, rollout_S) for x in realised_states]
+            # # Get S of the rollout
+            # rollout_S = pilco.get_controller().S.read_value().numpy()
+            # rollout_S_inverse = np.array([[1 / lam for lam in rollout_S]])
+            # all_S = np.append(all_S, rollout_S_inverse, axis=0)
+            # # Get linear controller ratio for each timestep of the rollout
+            # realised_states = [x[:state_dim] for x in X_new]
+            # rollout_ratio = [calculate_ratio(x, target, rollout_S) for x in realised_states]
 
             # write_to_csv = True if rollouts >= N - 3 else False
             write_to_csv = False
+            rollout_ratio, all_S = None, None
             plot_single_rollout_cycle(intermediate_mean, intermediate_var, [X_new], None, all_rewards, all_S,
-                                      rollout_ratio, state_dim, control_dim, T, rollouts, env='swing up',
+                                      rollout_ratio, state_dim, control_dim, T, rollouts, env='mountain car',
                                       write_to_csv=write_to_csv)
-
             # Update dataset
             X = np.vstack((X, X_new))
             Y = np.vstack((Y, Y_new))
             pilco.mgpr.set_data((X, Y))
-            save_gpflow_obj_to_path(controller, os.path.join(model_save_dir, f'swingup_controller{rollouts}.pkl'))
+            save_gpflow_obj_to_path(controller, os.path.join(model_save_dir, f'mountaincar_controller{rollouts}.pkl'))
+
         plt.show()
 
     else:
-        controller_path = os.path.join(model_save_dir, 'controllers', 'swingup_rbf_controller4.pkl')
-        controller = load_controller_from_obj(controller_path)
-
         env.up = True
         states = env.reset()
-
         for i in range(200):
             env.render()
-            action = controller.compute_action(tf.reshape(tf.convert_to_tensor(states), (1, -1)),
+            action = controller_linear.compute_action(tf.reshape(tf.convert_to_tensor(states), (1, -1)),
                                                       tf.zeros([state_dim, state_dim], dtype=tf.dtypes.float64),
-                                                      squash=True)[0]
+                                                      squash=False)[0]
             action = action[0, :].numpy()
             states, _, _, _ = env.step(action)
-            print(f'Step: {i}, action: {action}')
+            print(f'Step {i}: action={action}; x={states[0]:.2f}; x_dot={states[1]:.3f}')
 
     env.close()

@@ -1,6 +1,6 @@
 import numpy as np
 
-from examples.envs.envs_utils import myPendulum
+from pilco.envs_utils import myPendulum
 from pilco.controller_utils import LQR
 from pilco.controllers import CombinedController, LinearController
 from pilco.noise_robust_analysis import percentage_stable, analyze_robustness
