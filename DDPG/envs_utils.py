@@ -12,9 +12,6 @@ from tf_agents.trajectories import time_step as ts
 
 tf.compat.v1.enable_v2_behavior()
 
-from examples.envs.cartpole_env import CartPoleEnv
-from examples.envs.mountain_car_env import Continuous_MountainCarEnv as MountainCarEnv
-
 
 class myPendulum(py_environment.PyEnvironment):
     def __init__(self, initialize_top=False):
@@ -86,25 +83,43 @@ class myPendulum(py_environment.PyEnvironment):
 
         return A, B, C, Q
 
-
-class myMountainCar():
+class myMountainCar(py_environment.PyEnvironment):
     def __init__(self, initialize_top=False):
-        self.env = MountainCarEnv()
-        self.action_space = self.env.action_space
-        self.observation_space = self.env.observation_space
-        self.observation_space_dim = self.observation_space.shape[0]
+        self.env = suite_gym.load('Mountaincar-v7')
+        self._action_spec = self.env._action_spec
+        self._observation_spec = self.env._observation_spec
+        self._episode_ended = False
         self.up = initialize_top
+        self.env.gym.reset = self.modified_reset
 
-    def step(self, action):
-        return self.env.step(action)
+    def action_spec(self):
+        return self._action_spec
 
-    def reset(self):
+    def observation_spec(self):
+        return self._observation_spec
+
+    def modified_reset(self):
         if self.up:
             self.env.state = [np.pi / 180, 0.0]
         else:
             self.env.state = [-np.pi, 0.0]
-        self.env.steps_beyond_done = None
-        return self.env._get_obs()
+        self.env.gym.steps_beyond_done = None
+        self.env.gym.last_u = None
+        self._episode_ended = False
+        return self.env.gym._get_obs()
+
+    def _reset(self):
+        if self.up:
+            self.env.state = [np.pi / 180, 0.0]
+        else:
+            self.env.state = [-np.pi, 0.0]
+        self.env.gym.steps_beyond_done = None
+        self.env.gym.last_u = None
+        self._episode_ended = False
+        return ts.restart(np.array(self.env.gym.state))
+
+    def _step(self, action):
+        return self.env._step(action)
 
     def render(self):
         self.env.render()
@@ -114,14 +129,14 @@ class myMountainCar():
 
     def mutate_with_noise(self, noise_mag, arg_names: List[str]):
         for k in arg_names:
-            self.env.__dict__[k] = self.env.__dict__[k] * (1 + np.random.uniform(-noise_mag, noise_mag))
+            self.env.gym.__dict__[k] = self.env.gym.__dict__[k] * (1 + np.random.uniform(-noise_mag, noise_mag))
 
     def control(self):
         # m := mass of car
         # b := coefficient of friction of mountain. 'MountainCarEnv' env is frictionless
         b = 0
-        g = self.env.gravity
-        m = self.env.masscart
+        g = self.env.gym.gravity
+        m = self.env.gym.masscart
 
         # using x to approximate sin(x)
         A = np.array([[0, 1],
@@ -137,24 +152,43 @@ class myMountainCar():
         return A, B, C, Q
 
 
-class myCartpole():
+class myCartpole(py_environment.PyEnvironment):
     def __init__(self, initialize_top=False):
-        self.env = CartPoleEnv()
-        self.action_space = self.env.action_space
-        self.observation_space = self.env.observation_space
-        self.observation_space_dim = self.observation_space.shape[0] + 1
+        self.env = suite_gym.load('Cartpole-v7')
+        self._action_spec = self.env._action_spec
+        self._observation_spec = self.env._observation_spec
+        self._episode_ended = False
         self.up = initialize_top
+        self.env.gym.reset = self.modified_reset
 
-    def step(self, action):
-        return self.env.step(action)
+    def action_spec(self):
+        return self._action_spec
 
-    def reset(self):
+    def observation_spec(self):
+        return self._observation_spec
+
+    def modified_reset(self):
         if self.up:
             self.env.state = [0, 0, np.pi / 180, 0]
         else:
             self.env.state = [0.0, 0.0, np.pi, 0.0]
-        self.env.steps_beyond_done = None
-        return self.env._get_obs()
+        self.env.gym.steps_beyond_done = None
+        self.env.gym.last_u = None
+        self._episode_ended = False
+        return self.env.gym._get_obs()
+
+    def _reset(self):
+        if self.up:
+            self.env.state = [0, 0, np.pi / 180, 0]
+        else:
+            self.env.state = [0.0, 0.0, np.pi, 0.0]
+        self.env.gym.steps_beyond_done = None
+        self.env.gym.last_u = None
+        self._episode_ended = False
+        return ts.restart(np.array(self.env.gym.state))
+
+    def _step(self, action):
+        return self.env._step(action)
 
     def render(self):
         self.env.render()
@@ -164,7 +198,7 @@ class myCartpole():
 
     def mutate_with_noise(self, noise_mag, arg_names: List[str]):
         for k in arg_names:
-            self.env.__dict__[k] = self.env.__dict__[k] * (1 + np.random.uniform(-noise_mag, noise_mag))
+            self.env.gym.__dict__[k] = self.env.gym.__dict__[k] * (1 + np.random.uniform(-noise_mag, noise_mag))
 
     def control(self):
         # M := mass of cart
@@ -172,10 +206,10 @@ class myCartpole():
         # l := length of pole from end to centre
         # b := coefficient of friction of cart. 'CartPoleEnv' env is frictionless
         b = 0
-        M = self.env.masscart
-        m = self.env.masspole
-        l = self.env.length
-        g = self.env.gravity
+        M = self.env.gym.masscart
+        m = self.env.gym.masspole
+        l = self.env.gym.length
+        g = self.env.gym.gravity
         I = 1 / 3 * m * (l ** 2)
         p = I * (M + m) + M * m * (l ** 2)
 
