@@ -9,6 +9,8 @@ import tensorflow as tf
 from tf_agents.environments import py_environment, tf_environment, tf_py_environment, utils, suite_gym, wrappers
 from tf_agents.specs import array_spec
 from tf_agents.trajectories import time_step as ts
+from examples.envs.cartpole_env import CartPoleEnv
+from examples.envs.mountain_car_env import Continuous_MountainCarEnv
 
 tf.compat.v1.enable_v2_behavior()
 
@@ -100,9 +102,9 @@ class myMountainCar(py_environment.PyEnvironment):
 
     def modified_reset(self):
         if self.up:
-            self.env.state = [np.pi / 180, 0.0]
+            self.env.gym.state = [np.pi / 180, 0.0]
         else:
-            self.env.state = [-np.pi, 0.0]
+            self.env.gym.state = [-np.pi, 0.0]
         self.env.gym.steps_beyond_done = None
         self.env.gym.last_u = None
         self._episode_ended = False
@@ -110,9 +112,9 @@ class myMountainCar(py_environment.PyEnvironment):
 
     def _reset(self):
         if self.up:
-            self.env.state = [np.pi / 180, 0.0]
+            self.env.gym.state = [np.pi / 180, 0.0]
         else:
-            self.env.state = [-np.pi, 0.0]
+            self.env.gym.state = [-np.pi, 0.0]
         self.env.gym.steps_beyond_done = None
         self.env.gym.last_u = None
         self._episode_ended = False
@@ -169,9 +171,9 @@ class myCartpole(py_environment.PyEnvironment):
 
     def modified_reset(self):
         if self.up:
-            self.env.state = [0, 0, np.pi / 180, 0]
+            self.env.gym.state = [0, 0, np.pi / 180, 0]
         else:
-            self.env.state = [0.0, 0.0, np.pi, 0.0]
+            self.env.gym.state = [0.0, 0.0, np.pi, 0.0]
         self.env.gym.steps_beyond_done = None
         self.env.gym.last_u = None
         self._episode_ended = False
@@ -179,9 +181,9 @@ class myCartpole(py_environment.PyEnvironment):
 
     def _reset(self):
         if self.up:
-            self.env.state = [0, 0, np.pi / 180, 0]
+            self.env.gym.state = [0, 0, np.pi / 180, 0]
         else:
-            self.env.state = [0.0, 0.0, np.pi, 0.0]
+            self.env.gym.state = [0.0, 0.0, np.pi, 0.0]
         self.env.gym.steps_beyond_done = None
         self.env.gym.last_u = None
         self._episode_ended = False

@@ -39,8 +39,8 @@ if __name__ == '__main__':
     #
     # state_dim = 3
     # control_dim = 1
-    #
-    # controller_linear = LinearController(state_dim=state_dim, control_dim=control_dim, W=W_matrix, max_action=max_action)
+
+    controller_linear = LinearController(state_dim=state_dim, control_dim=control_dim, W=W_matrix, max_action=max_action)
 
     if not test_linear_control:
         pass
