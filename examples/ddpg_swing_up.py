@@ -5,8 +5,9 @@ import tensorflow as tf
 from tf_agents.environments import suite_gym, tf_py_environment
 from tf_agents.policies import random_tf_policy
 
-from DDPG.ddpg import DDPG, ReplayBuffer, train_agent
+from DDPG.ddpg import DDPG, LinearController, ReplayBuffer, train_agent
 from DDPG.envs_utils import myPendulum
+from controller_utils import LQR
 
 logging.basicConfig(level=logging.INFO)
 from utils import load_controller_from_obj
@@ -27,20 +28,18 @@ if __name__ == '__main__':
     num_eval_episodes = 5  # @param {type:"integer"}
     eval_interval = 1000  # @param {type:"integer"}
 
-    # env_name = 'Pendulum-v0'
-    # train_py_env = suite_gym.load(env_name)
-    # eval_py_env = suite_gym.load(env_name)
-    # train_env = tf_py_environment.TFPyEnvironment(train_py_env)
-    # eval_env = tf_py_environment.TFPyEnvironment(eval_py_env)
-    env = myPendulum()
+    train_py_env = myPendulum()
+    eval_py_env = myPendulum()
+    train_env = tf_py_environment.TFPyEnvironment(train_py_env)
+    eval_env = tf_py_environment.TFPyEnvironment(eval_py_env)
 
-    # A, B, C, Q = env.control()
-    # W_matrix = LQR().get_W_matrix(A, B, Q, env='swing up')
-    #
-    # state_dim = 3
-    # control_dim = 1
+    A, B, C, Q = train_py_env.control()
+    W_matrix = LQR().get_W_matrix(A, B, Q, env='swing up')
 
-    controller_linear = LinearController(state_dim=state_dim, control_dim=control_dim, W=W_matrix, max_action=max_action)
+    state_dim = 3
+    control_dim = 1
+
+    controller_linear = LinearController(state_dim=state_dim, control_dim=control_dim, W=W_matrix)
 
     if not test_linear_control:
         pass
@@ -67,19 +66,17 @@ if __name__ == '__main__':
 
     else:
         # controller_path = os.path.join(model_save_dir, 'controllers', 'swingup_rbf_controller4.pkl')
-        controller = load_controller_from_obj(controller_path)
+        # controller = load_controller_from_obj(controller_path)
 
-        env.up = True
-        states = env.reset()
+        train_py_env.up = True
+        train_py_env.reset()
+        state = train_py_env.env.gym._get_obs()
 
         for i in range(100):
-            env.render()
-            action = controller.compute_action(tf.reshape(tf.convert_to_tensor(states), (1, -1)),
-                                               tf.zeros([state_dim, state_dim], dtype=tf.dtypes.float64),
-                                               squash=True)[0]
-            action = action[0, :].numpy()
-            timestep = env.step([0.0])
-            state = env.env.gym.state
-            print(f'Step: {i}, state: {state}, observation: {timestep.observation}')
+            train_py_env.render()
+            action = controller_linear.compute_action(tf.reshape(tf.convert_to_tensor(state), (1, -1)))[0]
+            timestep = train_py_env.step(action)
+            state = timestep.observation
+            print(f'Step: {i}, state: {state}')
 
-    env.close()
+    train_py_env.close()

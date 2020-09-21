@@ -40,9 +40,9 @@ class LinearController(tf.Module):
         super().__init__(name=name)
         if W is None:
             self.w = tf.Variable(tf.random.normal([control_dim, state_dim]), trainable=True, name='W')
-            self.b = tf.Variable(tf.zeros([control_dim]), trainable=False, name='b')
+            self.b = tf.Variable(tf.zeros([control_dim]), trainable=False, name='b', dtype=tf.dtypes.float32)
         else:
-            self.W = tf.Variable(W, trainable=False, name='W')
+            self.W = tf.Variable(W, trainable=False, name='W', dtype=tf.dtypes.float32)
             self.b = tf.Variable(tf.zeros([control_dim]), trainable=False, name='b')
         self.max_action = max_action
 
@@ -52,7 +52,8 @@ class LinearController(tf.Module):
         IN: state (x)
         OUT: action (u)
         '''
-        u = x @ tf.transpose(self.W) + self.b  # mean output
+        x = tf.cast(x, dtype=tf.dtypes.float32, name='state')  # cast
+        u = x @ tf.transpose(self.W) + self.b
         return u
 
     def randomize(self):

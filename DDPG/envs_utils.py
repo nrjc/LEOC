@@ -9,19 +9,19 @@ import tensorflow as tf
 from tf_agents.environments import py_environment, tf_environment, tf_py_environment, utils, suite_gym, wrappers
 from tf_agents.specs import array_spec
 from tf_agents.trajectories import time_step as ts
-from examples.envs.cartpole_env import CartPoleEnv
-from examples.envs.mountain_car_env import Continuous_MountainCarEnv
 
 tf.compat.v1.enable_v2_behavior()
 
 
 class myPendulum(py_environment.PyEnvironment):
-    def __init__(self, initialize_top=False):
+    def __init__(self, initialize_top=False, name=None):
+        super().__init__()
         self.env = suite_gym.load('Pendulum-v0')
         self._action_spec = self.env._action_spec
         self._observation_spec = self.env._observation_spec
         self._episode_ended = False
         self.up = initialize_top
+        self.name = name
         self.env.gym.reset = self.modified_reset
 
     def action_spec(self):
@@ -86,12 +86,14 @@ class myPendulum(py_environment.PyEnvironment):
         return A, B, C, Q
 
 class myMountainCar(py_environment.PyEnvironment):
-    def __init__(self, initialize_top=False):
+    def __init__(self, initialize_top=False, name=None):
+        super().__init__()
         self.env = suite_gym.load('Mountaincar-v7')
         self._action_spec = self.env._action_spec
         self._observation_spec = self.env._observation_spec
         self._episode_ended = False
         self.up = initialize_top
+        self.name = name
         self.env.gym.reset = self.modified_reset
 
     def action_spec(self):
@@ -155,12 +157,14 @@ class myMountainCar(py_environment.PyEnvironment):
 
 
 class myCartpole(py_environment.PyEnvironment):
-    def __init__(self, initialize_top=False):
+    def __init__(self, initialize_top=False, name=None):
+        super().__init__()
         self.env = suite_gym.load('Cartpole-v7')
         self._action_spec = self.env._action_spec
         self._observation_spec = self.env._observation_spec
         self._episode_ended = False
         self.up = initialize_top
+        self.name = name
         self.env.gym.reset = self.modified_reset
 
     def action_spec(self):

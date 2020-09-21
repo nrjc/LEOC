@@ -7,7 +7,7 @@ logging.basicConfig(level=logging.INFO)
 from pilco.envs_utils import myMountainCar
 from pilco.models import PILCO
 from pilco.controllers import LinearController, CombinedController
-from pilco.controller_utils import LQR
+from controller_utils import LQR
 from pilco.plotting_utils import plot_single_rollout_cycle
 from pilco.rewards import ExponentialReward
 from utils import rollout, save_gpflow_obj_to_path
