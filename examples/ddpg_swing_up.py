@@ -5,8 +5,8 @@ import tensorflow as tf
 from tf_agents.environments import suite_gym, tf_py_environment
 from tf_agents.policies import random_tf_policy
 
+from examples.envs.pendulum_env import SwingUpEnv
 from DDPG.ddpg import DDPG, LinearController, ReplayBuffer, train_agent
-from DDPG.envs_utils import myPendulum
 from controller_utils import LQR
 
 logging.basicConfig(level=logging.INFO)
@@ -28,8 +28,8 @@ if __name__ == '__main__':
     num_eval_episodes = 5  # @param {type:"integer"}
     eval_interval = 1000  # @param {type:"integer"}
 
-    train_py_env = myPendulum()
-    eval_py_env = myPendulum()
+    train_py_env = suite_gym.load('Pendulum-v7')
+    eval_py_env = suite_gym.load('Pendulum-v7')
     train_env = tf_py_environment.TFPyEnvironment(train_py_env)
     eval_env = tf_py_environment.TFPyEnvironment(eval_py_env)
 
@@ -68,9 +68,9 @@ if __name__ == '__main__':
         # controller_path = os.path.join(model_save_dir, 'controllers', 'swingup_rbf_controller4.pkl')
         # controller = load_controller_from_obj(controller_path)
 
-        train_py_env.up = True
+        train_py_env.gym.up = True
         train_py_env.reset()
-        state = train_py_env.env.gym._get_obs()
+        state = train_py_env.gym._get_obs()
 
         for i in range(100):
             train_py_env.render()

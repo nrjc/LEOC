@@ -5,6 +5,8 @@ permalink: https://perma.cc/C9ZM-652R
 """
 
 import math
+from typing import List
+
 import gym
 from gym import spaces, logger
 from gym.utils import seeding
@@ -216,6 +218,41 @@ class CartPoleEnv(gym.Env):
         x, x_dot, theta, theta_dot = self.state
         obs = np.array([x, x_dot, np.cos(theta), np.sin(theta), theta_dot]).reshape(-1)
         return obs
+
+    def mutate_with_noise(self, noise_mag, arg_names: List[str]):
+        for k in arg_names:
+            self.__dict__[k] = self.__dict__[k] * (1 + np.random.uniform(-noise_mag, noise_mag))
+
+    def control(self):
+        # M := mass of cart
+        # m := mass of pole
+        # l := length of pole from end to centre
+        # b := coefficient of friction of cart. 'CartPoleEnv' env is frictionless
+        b = 0
+        M = self.masscart
+        m = self.masspole
+        l = self.length
+        g = self.gravity
+        I = 1 / 3 * m * (l ** 2)
+        p = I * (M + m) + M * m * (l ** 2)
+
+        # using x to approximate sin(x) and 1 to approximate cos(x)
+        A = np.array([[0, 1, 0, 0],
+                      [0, -(I + m * (l ** 2)) * b / p, (m ** 2) * g * (l ** 2) / p, 0],
+                      [0, 0, 0, 1],
+                      [0, (m * l * b) / p, m * g * l * (M + m) / p, 0]])
+
+        B = np.array([[0],
+                      [-(I + m * (l ** 2)) / p],
+                      [0],
+                      [m * l / p]])
+
+        C = np.array([[1, 0, 0, 0],
+                      [0, 0, 1, 0]])
+
+        Q = np.diag([2.0, .3, 2.0, 0.3])
+
+        return A, B, C, Q
 
     def close(self):
         if self.viewer:

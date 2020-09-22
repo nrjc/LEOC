@@ -10,6 +10,7 @@ itself from
 http://incompleteideas.net/sutton/MountainCar/MountainCar1.cp
 permalink: https://perma.cc/6Z2N-PFWC
 """
+from typing import List
 
 import numpy as np
 import gym
@@ -186,6 +187,30 @@ class Continuous_MountainCarEnv(gym.Env):
         position, velocity = self.state
         obs = np.array([position, velocity]).reshape(-1)
         return obs
+
+    def mutate_with_noise(self, noise_mag, arg_names: List[str]):
+        for k in arg_names:
+            self.__dict__[k] = self.__dict__[k] * (1 + np.random.uniform(-noise_mag, noise_mag))
+
+    def control(self):
+        # m := mass of car
+        # b := coefficient of friction of mountain. 'MountainCarEnv' env is frictionless
+        b = 0
+        g = self.gravity
+        m = self.masscart
+
+        # using x to approximate sin(x)
+        A = np.array([[0, 1],
+                      [g, -b / m]])
+
+        B = np.array([[0],
+                      [-1 / m]])
+
+        C = np.array([[1, 0]])
+
+        Q = np.diag([2.0, 0.3])
+
+        return A, B, C, Q
 
     def close(self):
         if self.viewer:
