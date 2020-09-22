@@ -36,7 +36,7 @@ FLAGS = flags.FLAGS
 
 
 class LinearController(tf.Module):
-    def __init__(self, state_dim, control_dim, max_action=1.0, W=None, b=None, name=None):
+    def __init__(self, state_dim, control_dim, max_action=1.0, W=None, b=None, name='LinearController'):
         super().__init__(name=name)
         if W is None:
             self.w = tf.Variable(tf.random.normal([control_dim, state_dim]), trainable=True, name='W')
@@ -63,9 +63,74 @@ class LinearController(tf.Module):
         self.b.assign(mean + sigma * np.random.normal(size=self.b.shape))
 
 
-class DDPG(object):
+class myActorNetwork(actor_network.ActorNetwork):
+    def __init__(self,
+                 input_tensor_spec,
+                 output_tensor_spec,
+                 fc_layer_params=None,
+                 dropout_layer_params=None,
+                 conv_layer_params=None,
+                 activation_fn=tf.keras.activations.relu,
+                 kernel_initializer=None,
+                 last_kernel_initializer=None,
+                 linear_controller=None,
+                 controller_location=None,
+                 name='ActorNetwork'):
+        super().__init__(input_tensor_spec=input_tensor_spec,
+                         output_tensor_spec=output_tensor_spec,
+                         fc_layer_params=fc_layer_params,
+                         dropout_layer_params=dropout_layer_params,
+                         conv_layer_params=conv_layer_params,
+                         activation_fn=activation_fn,
+                         kernel_initializer=kernel_initializer,
+                         last_kernel_initializer=last_kernel_initializer,
+                         name=name
+                         )
+        self.linear_controller = linear_controller
+        if controller_location is None:
+            controller_location = tf.zeros(shape=input_tensor_spec.shape, dtype=tf.dtypes.float32)
+        self.a = tf.Variable(initial_value=controller_location, trainable=False)
+        self.S = tf.Variable(tf.ones(shape=input_tensor_spec.shape, dtype=tf.dtypes.float32), trainable=True)
+        self.r = 1
 
-    def __init__(self, train_env, linear_controller=None):
+    def compute_ratio(self, x):
+        '''
+        Compute the ratio of the linear controller
+        '''
+        if self.linear_controller is not None:
+            S = self.S.read_value()
+            a = self.a.read_value()
+            d = (x - a) @ tf.linalg.diag(S) @ tf.transpose(x - a)
+            ratio = 1 / tf.pow(d + 1, 2)
+        else:
+            ratio = 0
+        return ratio
+
+    def call_ori(self, observations, step_type=(), network_state=(), training=False):
+        del step_type  # unused.
+        observations = tf.nest.flatten(observations)
+        output = tf.cast(observations[0], tf.float32)
+        for layer in self._mlp_layers:
+            output = layer(output, training=training)
+
+        actions = common.scale_to_spec(output, self._single_action_spec)
+        output_actions = tf.nest.pack_sequence_as(self._output_tensor_spec,
+                                                  [actions])
+
+        return output_actions, network_state
+
+    def call(self, observations, step_type=(), network_state=(), training=False):
+        h_actions, network_state = self.call_ori(observations, step_type=step_type, network_state=network_state,
+                                                      training=training)
+        self.r = self.compute_ratio(observations)
+        g_actions = self.linear_controller.compute_action(observations)
+        output_actions = self.r * g_actions + (1 - self.r) * h_actions
+        return output_actions, network_state
+
+
+class DDPG(tf.Module):
+    def __init__(self, train_env, linear_controller=None, controller_location=None, name='DDPG_agent'):
+        super().__init__(name=name)
         self.train_env = train_env
         self.actor_learning_rate = 1e-4
         self.critic_learning_rate = 1e-3
@@ -78,6 +143,8 @@ class DDPG(object):
             activation_fn=tf.keras.activations.relu,
             kernel_initializer=None,
             last_kernel_initializer=None,
+            # linear_controller=linear_controller,
+            # controller_location=controller_location,
             name='DDPG_actor')
         self.critic_network = critic_network.CriticNetwork(
             (self.train_env.observation_spec(), self.train_env.action_spec()),
@@ -119,7 +186,6 @@ class DDPG(object):
             train_step_counter=self.train_step_counter,
             name='DDPG_agent')
         self.agent.initialize()
-        self.linear_controller = linear_controller
         self.policy_saver = policy_saver.PolicySaver(self.agent.collect_policy, batch_size=None)
 
     def compute_avg_return(self, eval_env, num_episodes=5):
