@@ -63,7 +63,7 @@ class LinearController(tf.Module):
         self.b.assign(mean + sigma * np.random.normal(size=self.b.shape))
 
 
-class myActorNetwork(actor_network.ActorNetwork):
+class MyActorNetwork(actor_network.ActorNetwork):
     def __init__(self,
                  input_tensor_spec,
                  output_tensor_spec,
@@ -89,7 +89,7 @@ class myActorNetwork(actor_network.ActorNetwork):
         self.linear_controller = linear_controller
         if controller_location is None:
             controller_location = tf.zeros(shape=input_tensor_spec.shape, dtype=tf.dtypes.float32)
-        self.a = tf.Variable(initial_value=controller_location, trainable=False)
+        self.a = tf.Variable(initial_value=controller_location, dtype=tf.dtypes.float32, trainable=False)
         self.S = tf.Variable(tf.ones(shape=input_tensor_spec.shape, dtype=tf.dtypes.float32), trainable=True)
         self.r = 1
 
@@ -134,7 +134,7 @@ class DDPG(tf.Module):
         self.train_env = train_env
         self.actor_learning_rate = 1e-4
         self.critic_learning_rate = 1e-3
-        self.actor_network = actor_network.ActorNetwork(
+        self.actor_network = MyActorNetwork(
             self.train_env.observation_spec(),
             self.train_env.action_spec(),
             fc_layer_params=(400, 300),
