@@ -4,7 +4,7 @@ To run:
 tensorboard --logdir $HOME/tmp/ddpg/gym/HalfCheetah-v2/ --port 2223 &
 python tf_agents/agents/ddpg/examples/v2/train_eval.py \
   --root_dir=$HOME/tmp/ddpg/gym/HalfCheetah-v2/ \
-  --num_iterations=2000000 \
+  --num_iterations=100 \
   --alsologtostderr
 ```
 """
@@ -24,6 +24,7 @@ from tf_agents.policies import policy_saver
 from tf_agents.replay_buffers import tf_uniform_replay_buffer
 from tf_agents.trajectories import trajectory
 from tf_agents.utils import common
+import tensorboard
 
 tf.compat.v1.enable_v2_behavior()
 
@@ -35,32 +36,26 @@ flags.DEFINE_multi_string('gin_param', None, 'Gin binding parameters.')
 FLAGS = flags.FLAGS
 
 
-class LinearController(tf.Module):
-    def __init__(self, state_dim, control_dim, max_action=1.0, W=None, b=None, name='LinearController'):
+class LinearControllerLayer(tf.Module):
+    def __init__(self, state_dim, control_dim, W=None, b=None, name='LinearController'):
         super().__init__(name=name)
         if W is None:
-            self.w = tf.Variable(tf.random.normal([control_dim, state_dim]), trainable=True, name='W')
-            self.b = tf.Variable(tf.zeros([control_dim]), trainable=False, name='b', dtype=tf.dtypes.float32)
+            self.w = tf.Variable(tf.random.normal([control_dim, state_dim]), dtype=tf.dtypes.float32, trainable=True, name='W')
+            self.b = tf.Variable(tf.zeros([control_dim]), dtype=tf.dtypes.float32, trainable=False, name='b')
         else:
-            self.W = tf.Variable(W, trainable=False, name='W', dtype=tf.dtypes.float32)
-            self.b = tf.Variable(tf.zeros([control_dim]), trainable=False, name='b')
-        self.max_action = max_action
+            self.W = tf.Variable(W, dtype=tf.dtypes.float32, trainable=False, name='W')
+            self.b = tf.Variable(tf.zeros([control_dim]), dtype=tf.dtypes.float32, trainable=False, name='b')
 
-    def compute_action(self, x):
+    @tf.function
+    def __call__(self, x):
         '''
-        Simple affine action:  u <- W(x_t) + b
+        Simple affine action:  y <- W(x_t) + b
         IN: state (x)
-        OUT: action (u)
+        OUT: action (y)
         '''
-        x = tf.cast(x, dtype=tf.dtypes.float32, name='state')  # cast
-        u = x @ tf.transpose(self.W) + self.b
-        return u
-
-    def randomize(self):
-        mean = 0
-        sigma = 1
-        self.W.assign(mean + sigma * np.random.normal(size=self.W.shape))
-        self.b.assign(mean + sigma * np.random.normal(size=self.b.shape))
+        x = tf.cast(x, dtype=tf.dtypes.float32, name='state')
+        y = x @ tf.transpose(self.W) + self.b
+        return y
 
 
 class MyActorNetwork(actor_network.ActorNetwork):
@@ -90,41 +85,42 @@ class MyActorNetwork(actor_network.ActorNetwork):
         if controller_location is None:
             controller_location = tf.zeros(shape=input_tensor_spec.shape, dtype=tf.dtypes.float32)
         self.a = tf.Variable(initial_value=controller_location, dtype=tf.dtypes.float32, trainable=False)
-        self.S = tf.Variable(tf.ones(shape=input_tensor_spec.shape, dtype=tf.dtypes.float32), trainable=True)
-        self.r = 1
+        self.S = tf.Variable(tf.ones(shape=input_tensor_spec.shape, dtype=tf.dtypes.float32),
+                             constraint=lambda x: tf.clip_by_value(x, 0, np.infty), trainable=True)
+        # self.ratio = tf.Variable(tf.zeros(shape=self.S.shape, dtype=tf.dtypes.float32), name='ratio')
 
     def compute_ratio(self, x):
         '''
         Compute the ratio of the linear controller
         '''
         if self.linear_controller is not None:
-            S = self.S.read_value()
-            a = self.a.read_value()
+            S = self.S
+            a = self.a
             d = (x - a) @ tf.linalg.diag(S) @ tf.transpose(x - a)
-            ratio = 1 / tf.pow(d + 1, 2)
+            d_diag = tf.linalg.diag_part(d)
+            ratio = 1 / tf.pow(d_diag + 1, 2)
         else:
             ratio = 0
+        ratio = tf.expand_dims(ratio, axis=-1)
         return ratio
 
-    def call_ori(self, observations, step_type=(), network_state=(), training=False):
+    def call(self, observations, step_type=(), network_state=(), training=False):
         del step_type  # unused.
+
+        r = self.compute_ratio(observations)  # calculate ratio of linear controller
+        g_actions = self.linear_controller(observations)  # calculate linear action
+
         observations = tf.nest.flatten(observations)
         output = tf.cast(observations[0], tf.float32)
         for layer in self._mlp_layers:
             output = layer(output, training=training)
+        h_actions = output  # non-linear action
+        actions = r * g_actions + (1 - r) * h_actions  # combined action
 
-        actions = common.scale_to_spec(output, self._single_action_spec)
+        actions = common.scale_to_spec(actions, self._single_action_spec)  # squash actions into action_spec bounds
         output_actions = tf.nest.pack_sequence_as(self._output_tensor_spec,
                                                   [actions])
 
-        return output_actions, network_state
-
-    def call(self, observations, step_type=(), network_state=(), training=False):
-        h_actions, network_state = self.call_ori(observations, step_type=step_type, network_state=network_state,
-                                                      training=training)
-        self.r = self.compute_ratio(observations)
-        g_actions = self.linear_controller.compute_action(observations)
-        output_actions = self.r * g_actions + (1 - self.r) * h_actions
         return output_actions, network_state
 
 
@@ -143,8 +139,8 @@ class DDPG(tf.Module):
             activation_fn=tf.keras.activations.relu,
             kernel_initializer=None,
             last_kernel_initializer=None,
-            # linear_controller=linear_controller,
-            # controller_location=controller_location,
+            linear_controller=linear_controller,
+            controller_location=controller_location,
             name='DDPG_actor')
         self.critic_network = critic_network.CriticNetwork(
             (self.train_env.observation_spec(), self.train_env.action_spec()),
@@ -250,7 +246,7 @@ class ReplayBuffer(object):
         return iterator
 
 
-def train_agent(ddpg, replay_buffer, eval_env, num_iterations, initial_collect_steps=1000,
+def train_agent(ddpg, replay_buffer, eval_env, num_iterations, batch_size=64, initial_collect_steps=1000,
                 collect_steps_per_iteration=1, num_eval_episodes=5, log_interval=200, eval_interval=1000):
     # (Optional) Optimize by wrapping some of the code in a graph using TF function.
     ddpg.agent.train = common.function(ddpg.agent.train)
@@ -271,7 +267,7 @@ def train_agent(ddpg, replay_buffer, eval_env, num_iterations, initial_collect_s
         replay_buffer.collect_data(steps=collect_steps_per_iteration)
 
         # Sample a batch of data from the buffer and update the agent's network.
-        iterator = replay_buffer.get_dataset()
+        iterator = replay_buffer.get_dataset(batch_size)
         experience, _ = next(iterator)
         train_loss = ddpg.agent.train(experience).loss
 
