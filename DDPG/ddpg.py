@@ -277,7 +277,6 @@ def train_agent(ddpg, replay_buffer, eval_env, num_iterations, batch_size=64, in
         experience, _ = next(iterator)
         train_loss = ddpg.agent.train(experience).loss
 
-        ddpg.policy_saver.save(f'policy_0')
         step = ddpg.train_step_counter.numpy()
 
         if step % log_interval == 0:
