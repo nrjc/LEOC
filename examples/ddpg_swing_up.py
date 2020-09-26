@@ -51,7 +51,7 @@ if __name__ == '__main__':
         # print('time_step_spec.discount:', env.time_step_spec().discount)
         # print('time_step_spec.reward:', env.time_step_spec().reward)
 
-        myDDPGagent = DDPG(train_env, linear_controller=controller_linear, controller_location=target)
+        myDDPGagent = DDPG(train_env, linear_controller=None, controller_location=target)
         myReplayBuffer = ReplayBuffer(myDDPGagent, train_env, replay_buffer_capacity, initial_collect_steps,
                                       collect_steps_per_iteration)
 

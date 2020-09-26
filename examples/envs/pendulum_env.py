@@ -1,11 +1,7 @@
-"""
-Classic cart-pole system implemented by Rich Sutton et al.
-Copied from http://incompleteideas.net/sutton/book/code/pole.c
-permalink: https://perma.cc/C9ZM-652R
-"""
 from typing import List
 from gym.envs.classic_control import PendulumEnv
 import numpy as np
+
 
 class SwingUpEnv(PendulumEnv):
     def __init__(self, initialize_top=False, name=None):
@@ -18,6 +14,9 @@ class SwingUpEnv(PendulumEnv):
             self.state = [np.pi / 180, 0.0]
         else:
             self.state = [np.pi, 0.0]
+            high = np.array([np.pi/180 * 90, 0.5])
+            noise = self.np_random.uniform(low=-high, high=high)
+            self.state = self.state + noise
         self.last_u = None
         return self._get_obs()
 

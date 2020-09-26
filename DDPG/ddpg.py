@@ -87,6 +87,7 @@ class MyActorNetwork(actor_network.ActorNetwork):
         self.a = tf.Variable(initial_value=controller_location, dtype=tf.dtypes.float32, trainable=False)
         self.S = tf.Variable(tf.ones(shape=input_tensor_spec.shape, dtype=tf.dtypes.float32),
                              constraint=lambda x: tf.clip_by_value(x, 0, np.infty), trainable=True)
+        self.r = 1
         # self.ratio = tf.Variable(tf.zeros(shape=self.S.shape, dtype=tf.dtypes.float32), name='ratio')
 
     def compute_ratio(self, x):
@@ -100,15 +101,20 @@ class MyActorNetwork(actor_network.ActorNetwork):
             d_diag = tf.linalg.diag_part(d)
             ratio = 1 / tf.pow(d_diag + 1, 2)
         else:
-            ratio = 0
+            ratio = 0.0
         ratio = tf.expand_dims(ratio, axis=-1)
+        self.r = ratio
         return ratio
 
-    def call(self, observations, step_type=(), network_state=(), training=False):
+    def call_try(self, observations, step_type=(), network_state=(), training=False):
+        # output_actions, network_state = super().call(observations, step_type=(), network_state=(), training=False)
         del step_type  # unused.
 
         r = self.compute_ratio(observations)  # calculate ratio of linear controller
-        g_actions = self.linear_controller(observations)  # calculate linear action
+        if self.linear_controller:
+            g_actions = self.linear_controller(observations)  # calculate linear action
+        else:
+            g_actions = 0.0
 
         observations = tf.nest.flatten(observations)
         output = tf.cast(observations[0], tf.float32)
@@ -276,6 +282,7 @@ def train_agent(ddpg, replay_buffer, eval_env, num_iterations, batch_size=64, in
 
         if step % log_interval == 0:
             print(f'step = {step}: loss = {train_loss}')
+            # print(f'S: {ddpg.actor_network.S}, r: {ddpg.actor_network.r}')
 
         if step % eval_interval == 0:
             avg_return = ddpg.compute_avg_return(eval_env, num_episodes=num_eval_episodes)
