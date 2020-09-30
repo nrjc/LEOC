@@ -77,7 +77,9 @@ class CartPoleEnv(gym.Env):
         # is still within bounds.
         high = np.array([self.x_threshold * 2,
                          np.finfo(np.float32).max,
-                         self.theta_threshold_radians * 2,
+                         # self.theta_threshold_radians * 2,
+                         1.,
+                         1.,
                          np.finfo(np.float32).max],
                         dtype=np.float32)
         self.observation_space = spaces.Box(
@@ -156,9 +158,12 @@ class CartPoleEnv(gym.Env):
         return self._get_obs(), reward, done, {}
 
     def reset(self):
-        self.state = self.np_random.uniform(low=-0.05, high=0.05, size=(4,))
+        self.state = [0.0, 0.0, np.pi, 0.0]
+        high = np.array([0.1, 0.1, np.pi / 180 * 30, 0.1])
+        noise = self.np_random.uniform(low=-high, high=high)
+        self.state = self.state + noise
         self.steps_beyond_done = None
-        return np.array(self.state)
+        return self._get_obs()
 
     def render(self, mode='human'):
         screen_width = 600

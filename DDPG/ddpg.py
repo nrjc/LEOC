@@ -85,8 +85,9 @@ class MyActorNetwork(actor_network.ActorNetwork):
         if controller_location is None:
             controller_location = tf.zeros(shape=input_tensor_spec.shape, dtype=tf.dtypes.float32)
         self.a = tf.Variable(initial_value=controller_location, dtype=tf.dtypes.float32, trainable=False)
-        self.S = tf.Variable(tf.ones(shape=input_tensor_spec.shape, dtype=tf.dtypes.float32),
-                             constraint=lambda x: tf.clip_by_value(x, 0, np.infty), trainable=True)
+        # self.S = tf.Variable(tf.ones(shape=input_tensor_spec.shape, dtype=tf.dtypes.float32),
+        #                      constraint=lambda x: tf.clip_by_value(x, 0, np.infty), trainable=True)
+        self.S = tf.Variable([50.0, 4.0, 3.0], trainable=True)
         self.r = 1
         # self.ratio = tf.Variable(tf.zeros(shape=self.S.shape, dtype=tf.dtypes.float32), name='ratio')
 
@@ -94,7 +95,7 @@ class MyActorNetwork(actor_network.ActorNetwork):
         '''
         Compute the ratio of the linear controller
         '''
-        if self.linear_controller is not None:
+        if self.linear_controller:
             S = self.S
             a = self.a
             d = (x - a) @ tf.linalg.diag(S) @ tf.transpose(x - a)
@@ -106,7 +107,7 @@ class MyActorNetwork(actor_network.ActorNetwork):
         self.r = ratio
         return ratio
 
-    def call_try(self, observations, step_type=(), network_state=(), training=False):
+    def call(self, observations, step_type=(), network_state=(), training=False):
         # output_actions, network_state = super().call(observations, step_type=(), network_state=(), training=False)
         del step_type  # unused.
 
@@ -124,8 +125,7 @@ class MyActorNetwork(actor_network.ActorNetwork):
         actions = r * g_actions + (1 - r) * h_actions  # combined action
 
         actions = common.scale_to_spec(actions, self._single_action_spec)  # squash actions into action_spec bounds
-        output_actions = tf.nest.pack_sequence_as(self._output_tensor_spec,
-                                                  [actions])
+        output_actions = tf.nest.pack_sequence_as(self._output_tensor_spec, [actions])
 
         return output_actions, network_state
 
@@ -172,8 +172,8 @@ class DDPG(tf.Module):
             critic_network=self.critic_network,
             actor_optimizer=self.actor_optimizer,
             critic_optimizer=self.critic_optimizer,
-            ou_stddev=0.2,
-            ou_damping=0.15,
+            ou_stddev=1.,
+            ou_damping=.3,
             target_actor_network=None,
             target_critic_network=None,
             target_update_tau=0.05,
@@ -261,8 +261,9 @@ def train_agent(ddpg, replay_buffer, eval_env, num_iterations, batch_size=64, in
     ddpg.train_step_counter.assign(0)
 
     # Evaluate the agent's policy once before training.
-    avg_return = ddpg.compute_avg_return(eval_env)
+    avg_return = ddpg.compute_avg_return(eval_env, num_episodes=num_eval_episodes)
     returns = [avg_return]
+    lambdas = [ddpg.actor_network.S.numpy()]
 
     # Collect some initial experience
     replay_buffer.collect_data(steps=initial_collect_steps)
@@ -278,16 +279,19 @@ def train_agent(ddpg, replay_buffer, eval_env, num_iterations, batch_size=64, in
         train_loss = ddpg.agent.train(experience).loss
 
         step = ddpg.train_step_counter.numpy()
+        lambdas.append(ddpg.actor_network.S.numpy())
 
-        if step % log_interval == 0:
-            print(f'step = {step}: loss = {train_loss}')
-            # print(f'S: {ddpg.actor_network.S}, r: {ddpg.actor_network.r}')
+        # if step % log_interval == 0:
+        #     print(f'step = {step}: loss = {train_loss}')
+        #     # print(f'S: {ddpg.actor_network.S}, r: {ddpg.actor_network.r}')
 
         if step % eval_interval == 0:
             avg_return = ddpg.compute_avg_return(eval_env, num_episodes=num_eval_episodes)
             print(f'step = {step}: Average Return = {avg_return}')
             returns.append(avg_return)
             # utils_plot(num_iterations, eval_interval, returns)
-            ddpg.policy_saver.save(f'policy_{step // eval_interval}')
+            # ddpg.policy_saver.save(f'policy_{step // eval_interval}')
 
+    print(f'returns {returns}')
+    print(f'lambdas {lambdas}')
     print(f'Finished training for {num_iterations} iterations')
