@@ -87,7 +87,7 @@ class MyActorNetwork(actor_network.ActorNetwork):
         self.a = tf.Variable(initial_value=controller_location, dtype=tf.dtypes.float32, trainable=False)
         # self.S = tf.Variable(tf.ones(shape=input_tensor_spec.shape, dtype=tf.dtypes.float32),
         #                      constraint=lambda x: tf.clip_by_value(x, 0, np.infty), trainable=True)
-        self.S = tf.Variable([50.0, 4.0, 3.0], trainable=True)
+        self.S = tf.Variable([1000.0, 50.0, 40.0, 3.0, 2.0], trainable=True)
         self.r = 1
         # self.ratio = tf.Variable(tf.zeros(shape=self.S.shape, dtype=tf.dtypes.float32), name='ratio')
 
@@ -134,7 +134,7 @@ class DDPG(tf.Module):
     def __init__(self, train_env, linear_controller=None, controller_location=None, name='DDPG_agent'):
         super().__init__(name=name)
         self.train_env = train_env
-        self.actor_learning_rate = 1e-4
+        self.actor_learning_rate = 1e-3
         self.critic_learning_rate = 1e-3
         self.actor_network = MyActorNetwork(
             self.train_env.observation_spec(),
@@ -172,8 +172,8 @@ class DDPG(tf.Module):
             critic_network=self.critic_network,
             actor_optimizer=self.actor_optimizer,
             critic_optimizer=self.critic_optimizer,
-            ou_stddev=1.,
-            ou_damping=.3,
+            ou_stddev=.5,
+            ou_damping=.2,
             target_actor_network=None,
             target_critic_network=None,
             target_update_tau=0.05,
@@ -264,6 +264,7 @@ def train_agent(ddpg, replay_buffer, eval_env, num_iterations, batch_size=64, in
     avg_return = ddpg.compute_avg_return(eval_env, num_episodes=num_eval_episodes)
     returns = [avg_return]
     lambdas = [ddpg.actor_network.S.numpy()]
+    best_return = -np.finfo(np.float32).max
 
     # Collect some initial experience
     replay_buffer.collect_data(steps=initial_collect_steps)
@@ -290,8 +291,11 @@ def train_agent(ddpg, replay_buffer, eval_env, num_iterations, batch_size=64, in
             print(f'step = {step}: Average Return = {avg_return}')
             returns.append(avg_return)
             # utils_plot(num_iterations, eval_interval, returns)
-            # ddpg.policy_saver.save(f'policy_{step // eval_interval}')
+
+            if step > int(num_iterations/5 * 4) and avg_return > best_return:
+                best_return = avg_return
+                ddpg.policy_saver.save(f'policy_{step // eval_interval}')
 
     print(f'returns {returns}')
-    print(f'lambdas {lambdas}')
+    # print(f'lambdas {lambdas}')
     print(f'Finished training for {num_iterations} iterations')
