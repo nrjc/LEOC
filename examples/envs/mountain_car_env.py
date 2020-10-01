@@ -109,7 +109,7 @@ class Continuous_MountainCarEnv(gym.Env):
     def reset(self):
         self.state = np.array([self.starting_position, 0])
         self.steps_beyond_done = None
-        return np.array(self.state)
+        return self._get_obs()
 
     def _height(self, xs):
         x = xs * self.x_scale + self.x_offset
