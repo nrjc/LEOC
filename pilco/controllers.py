@@ -8,7 +8,11 @@ import gpflow
 from gpflow import Parameter
 from gpflow import set_trainable
 from gpflow.utilities import positive
-from tensorflow_probability.python.bijectors import Chain, ScaleMatvecDiag
+from tf_agents.policies.py_policy import PyPolicy
+from tf_agents.policies.py_tf_policy import PyTFPolicy
+from tf_agents.policies.tf_policy import TFPolicy
+from tf_agents.trajectories import time_step as ts, policy_step
+from tf_agents.typing import types
 
 f64 = gpflow.utilities.to_default_float
 
@@ -43,14 +47,17 @@ def squash_sin(m, s, max_action=None):
     return M, S, tf.reshape(C, shape=[k, k])
 
 
-class LinearController(gpflow.Module):
-    def __init__(self, state_dim, control_dim, max_action=1.0, W=None, b=None, trainable=True):
+class LinearController(gpflow.Module, PyTFPolicy):
+    def __init__(self, state_dim, control_dim, max_action=1.0, W=None, b=None, trainable=True, time_step_spec=(), action_spec=()):
         gpflow.Module.__init__(self)
+        PyPolicy.__init__(self, time_step_spec, action_spec)
+        PyTFPolicy.__init__(self, self)
+        self.state_dim = state_dim
         if W is None:
-            self.W = Parameter(np.random.rand(control_dim, state_dim), trainable=trainable)
+            self.W = Parameter(np.random.rand(control_dim, state_dim), dtype=float_type, trainable=trainable)
         else:
-            self.W = Parameter(W, trainable=trainable)
-        self.b = Parameter(np.zeros((1, control_dim), dtype=float_type), trainable=trainable)
+            self.W = Parameter(W, dtype=float_type, trainable=trainable)
+        self.b = Parameter(np.zeros((1, control_dim), dtype=float_type), dtype=float_type, trainable=trainable)
         self.max_action = max_action
 
     def compute_action(self, m, s, squash=True):
@@ -59,13 +66,18 @@ class LinearController(gpflow.Module):
         IN: mean (m) and variance (s) of the state
         OUT: mean (M) and variance (S) of the action
         '''
-        M = m @ tf.transpose(self.W) + self.b  # mean output
+        M = tf.reshape(m, (-1, self.state_dim)) @ tf.transpose(self.W) + self.b  # mean output
         S = self.W @ s @ tf.transpose(self.W)  # output variance
         V = tf.transpose(self.W)  # input output covariance
         if squash:
             M, S, V2 = squash_sin(M, S, self.max_action)
             V = V @ V2
         return M, S, V
+
+    def _action(self, time_step: ts.TimeStep, policy_state: types.NestedArray) -> policy_step.PolicyStep:
+        obs = time_step.observation
+        M, S, V = self.compute_action(obs, tf.zeros((self.state_dim, self.state_dim), float_type), True)
+        return policy_step.PolicyStep(M, (), ())
 
     def randomize(self):
         mean = 0;
@@ -167,8 +179,8 @@ class RbfController(MGPR):
         N = loc.shape[0]
 
         mid_p = self.compute_action(tf.reshape(tf.convert_to_tensor(loc), (1, -1)),
-                                   tf.zeros([N, N], dtype=tf.dtypes.float64),
-                                   squash=True)[0].numpy()
+                                    tf.zeros([N, N], dtype=tf.dtypes.float64),
+                                    squash=True)[0].numpy()
         epsilon = 1e-6
         weight = np.zeros_like(loc)
         for i in range(len(weight)):
@@ -200,22 +212,22 @@ class RbfController(MGPR):
         weight_term_collector = 0
         for m in self.models:
             centers = m.data[0][:, :].numpy()
-            f_weight = m.data[1][:,0].numpy()
+            f_weight = m.data[1][:, 0].numpy()
             for center, weight in zip(centers, f_weight):
-                lengthscale = np.diag(np.square(1/m.kernel.lengthscales.numpy()))
+                lengthscale = np.diag(np.square(1 / m.kernel.lengthscales.numpy()))
                 temp = (loc - center).reshape(state_dim, 1)
                 exp_term = m.kernel.variance.numpy() * np.exp(
-                    -0.5 * (temp.T @ lengthscale@ temp).item())  # Check that it is truly 1/var and not var
+                    -0.5 * (temp.T @ lengthscale @ temp).item())  # Check that it is truly 1/var and not var
                 differential_term = -exp_term * (lengthscale @ temp)
-                bias_term_collector += weight*(exp_term - differential_term.T @ loc.reshape(state_dim, 1)).item()
-                weight_term_collector += weight*differential_term
+                bias_term_collector += weight * (exp_term - differential_term.T @ loc.reshape(state_dim, 1)).item()
+                weight_term_collector += weight * differential_term
             returnable_obj.append((weight_term_collector, bias_term_collector))
             bias_term_collector = 0
             weight_term_collector = 0
         return returnable_obj
 
 
-class CombinedController(gpflow.Module):
+class CombinedController(gpflow.Module, PyPolicy):
     '''
     An RBF Controller implemented as a deterministic GP
     See Deisenroth et al 2015: Gaussian Processes for Data-Efficient Learning in Robotics and Control
@@ -243,6 +255,12 @@ class CombinedController(gpflow.Module):
         d = (x - a) @ tf.linalg.diag(S) @ tf.transpose(x - a)
         ratio = 1 / tf.pow(d + 1, 2)
         return ratio
+
+    def action(self, time_step: ts.TimeStep, policy_state: types.NestedArray = ()) -> policy_step.PolicyStep:
+        obs = time_step.observation
+        Mprev, Sprev, Vprev = policy_state
+        M, S, V = self.compute_action(obs, Sprev)
+        return policy_step.PolicyStep(M, (M, S, V), {})
 
     def compute_action(self, m, s, squash=True):
         '''
