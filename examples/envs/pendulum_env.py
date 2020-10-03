@@ -14,7 +14,7 @@ class SwingUpEnv(PendulumEnv):
             self.state = [np.pi / 180, 0.0]
         else:
             self.state = [np.pi, 0.0]
-        high = np.array([np.pi/180 * 90, 0.5])
+        high = np.array([np.pi/180 * 10, 0.1])
         noise = self.np_random.uniform(low=-high, high=high)
         self.state = self.state + noise
         self.last_u = None

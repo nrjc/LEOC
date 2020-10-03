@@ -88,26 +88,17 @@ class Continuous_MountainCarEnv(gym.Env):
             or position > self.position_max
         )
 
-        if not done:
-            reward = 1.0
-        elif self.steps_beyond_done is None:
-            self.steps_beyond_done = 0
-            reward = 1.0
-        else:
-            if self.steps_beyond_done == 0:
-                logger.warn(
-                    "You are calling 'step()' even though this "
-                    "environment has already returned done = True. You "
-                    "should always call 'reset()' once you receive 'done = "
-                    "True' -- any further steps are undefined behavior."
-                )
-            self.steps_beyond_done += 1
-            reward = 0.0
+        reward = - 0.1 * (5 * (position ** 2) + (velocity ** 2) + .05 * (force ** 2))
+        if done:
+            reward -= 100
 
         return self._get_obs(), reward, done, {}
 
     def reset(self):
         self.state = np.array([self.starting_position, 0])
+        high = np.array([np.pi * (30 / 180) / self.x_scale, 0.1])
+        noise = self.np_random.uniform(low=-high, high=high)
+        self.state = self.state + noise
         self.steps_beyond_done = None
         return self._get_obs()
 

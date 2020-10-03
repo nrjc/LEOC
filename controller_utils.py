@@ -32,7 +32,7 @@ class LQR:
             K_prime = K
 
         else:
-            logger.error("--- Error: LQR.get_k_prime() env incorrect! ---")
+            raise Exception("--- Error: LQR.get_k_prime() env incorrect! ---")
         return K_prime
 
 

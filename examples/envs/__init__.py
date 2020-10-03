@@ -17,6 +17,6 @@ register(
 
 register(
     id='Mountaincar-v7',
-    entry_point='examples.envs.examples.envs.mountain_car_env:Continuous_MountainCarEnv',
+    entry_point='examples.envs.mountain_car_env:Continuous_MountainCarEnv',
     max_episode_steps=200,
 )

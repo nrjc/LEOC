@@ -19,7 +19,7 @@ if __name__ == '__main__':
     # Define params
     test_linear_control = False
     num_iterations = 20000  # @param {type:"integer"}
-    initial_collect_steps = 1000  # @param {type:"integer"}
+    initial_collect_steps = 2000  # @param {type:"integer"}
     collect_steps_per_iteration = 1  # @param {type:"integer"}
     replay_buffer_capacity = 100000  # @param {type:"integer"}
     batch_size = 64  # @param {type:"integer"}

@@ -18,15 +18,15 @@ np.random.seed(0)
 if __name__ == '__main__':
     # Define params
     test_linear_control = False
-    num_iterations = 10000  # @param {type:"integer"}
-    initial_collect_steps = 2000  # @param {type:"integer"}
+    num_iterations = 15000  # @param {type:"integer"}
+    initial_collect_steps = 1000  # @param {type:"integer"}
     collect_steps_per_iteration = 1  # @param {type:"integer"}
     replay_buffer_capacity = 100000  # @param {type:"integer"}
     batch_size = 64  # @param {type:"integer"}
     learning_rate = 1e-3  # @param {type:"number"}
     log_interval = 500  # @param {type:"integer"}
-    num_eval_episodes = 3  # @param {type:"integer"}
-    eval_interval = 300  # @param {type:"integer"}
+    num_eval_episodes = 2  # @param {type:"integer"}
+    eval_interval = 250  # @param {type:"integer"}
     target = np.array([0.0, 0.0])
 
     train_py_env = suite_gym.load('Mountaincar-v7')
