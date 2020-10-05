@@ -1,26 +1,28 @@
-from typing import List
+from typing import List, Union
 
 import gin
 import gym
 from gpflow import set_trainable
+from tf_agents.agents import DdpgAgent
 from tf_agents.drivers import dynamic_episode_driver
 from tf_agents.environments.tf_py_environment import TFPyEnvironment
 from tf_agents.metrics import tf_metrics
 from tf_agents.policies.py_policy import PyPolicy
 from tf_agents.trajectories.trajectory import Trajectory
 import numpy as np
+
+from DDPG.ddpg import train_agent, DDPG
 from dao.metrics import CompleteStateObservation
 from pilco.models import PILCO
 from pilco.rewards import ExponentialReward
 from utils import rollout
-
+import tensorflow as tf
 
 class Trainer:
-    def __init__(self, env: TFPyEnvironment, controller: PyPolicy):
+    def __init__(self, env: TFPyEnvironment):
         self.env = env
-        self.controller = controller
 
-    def train(self) -> PyPolicy:
+    def train(self) -> tf.Module:
         raise NotImplementedError
 
     def eval(self) -> List[Trajectory]:
@@ -29,23 +31,32 @@ class Trainer:
 
 @gin.configurable
 class DDPGTrainer(Trainer):
-    def __init__(self, env: TFPyEnvironment, controller: PyPolicy):
-        super().__init__(env, controller)
+    def __init__(self, env: TFPyEnvironment, ddpg: DDPG):
+        super().__init__(env)
+        self.ddpg_agent = ddpg.agent
 
-    def train(self) -> PyPolicy:
-        pass
+    def train(self) -> DDPG:
+        return train_agent()
 
     def eval(self) -> List[Trajectory]:
-        pass
+        num_episodes = tf_metrics.NumberOfEpisodes()
+        env_steps = tf_metrics.EnvironmentSteps()
+        state_obs = CompleteStateObservation()
+        observers = [num_episodes, env_steps, state_obs]
+        driver = dynamic_episode_driver.DynamicEpisodeDriver(
+            self.env, self.ddpg_agent.collect_policy, observers, num_episodes=2)
+        final_time_step, _ = driver.run(policy_state=())
+        return state_obs.result()
 
 
 @gin.configurable
 class PILCOTrainer(Trainer):
-    def __init__(self, env: TFPyEnvironment, controller: PyPolicy, target: List[float], weights: List[float],
+    def __init__(self, env: TFPyEnvironment, controller: Union[PyPolicy, tf.Module], target: List[float], weights: List[float],
                  m_init: List[float], S_init: List[float],
                  initial_num_rollout: int = 3, training_rollout_total_num: int = 15, timesteps: int = 40, subs: int = 3,
                  max_iter_policy_train: int = 50, max_training_restarts: int = 2):
-        super().__init__(env, controller)
+        super().__init__(env)
+        self.controller = controller
         self.target = np.array(target)
         self.weights = np.diag(weights)
         self.initial_num_rollout = initial_num_rollout
@@ -58,7 +69,7 @@ class PILCOTrainer(Trainer):
         self.S_init = np.diag(S_init)
         self.env = env.pyenv
 
-    def train(self) -> PyPolicy:
+    def train(self) -> tf.Module:
         R = ExponentialReward(state_dim=self.env.observation_spec().shape[0], t=self.target, W=self.weights)
         env = self.env.envs[0]._env.gym # Dirty hacks all around
         # Initial random rollouts to generate a dataset

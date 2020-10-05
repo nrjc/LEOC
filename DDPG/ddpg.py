@@ -19,12 +19,14 @@ import tensorflow as tf
 from tf_agents.agents import DdpgAgent
 from tf_agents.agents.ddpg import actor_network, critic_network
 from tf_agents.drivers import dynamic_step_driver
+from tf_agents.environments.tf_py_environment import TFPyEnvironment
 from tf_agents.metrics import tf_metrics
 from tf_agents.policies import policy_saver
 from tf_agents.replay_buffers import tf_uniform_replay_buffer
 from tf_agents.trajectories import trajectory
 from tf_agents.utils import common
 import tensorboard
+import gin
 
 tf.compat.v1.enable_v2_behavior()
 
@@ -36,11 +38,15 @@ flags.DEFINE_multi_string('gin_param', None, 'Gin binding parameters.')
 FLAGS = flags.FLAGS
 
 
+@gin.configurable
 class LinearControllerLayer(tf.Module):
-    def __init__(self, state_dim, control_dim, W=None, b=None, name='LinearController'):
-        super().__init__(name=name)
+    def __init__(self, env: TFPyEnvironment, W=None, b=None, trainable=False):
+        super(LinearControllerLayer, self).__init__()
+        state_dim = env.observation_spec().shape[0]
+        control_dim = env.action_spec().shape[0]
         if W is None:
-            self.w = tf.Variable(tf.random.normal([control_dim, state_dim]), dtype=tf.dtypes.float32, trainable=True, name='W')
+            self.w = tf.Variable(tf.random.normal([control_dim, state_dim]), dtype=tf.dtypes.float32, trainable=True,
+                                 name='W')
             self.b = tf.Variable(tf.zeros([control_dim]), dtype=tf.dtypes.float32, trainable=False, name='b')
         else:
             self.W = tf.Variable(W, dtype=tf.dtypes.float32, trainable=False, name='W')
@@ -70,6 +76,7 @@ class MyActorNetwork(actor_network.ActorNetwork):
                  last_kernel_initializer=None,
                  linear_controller=None,
                  controller_location=None,
+                 S=None,
                  name='ActorNetwork'):
         super().__init__(input_tensor_spec=input_tensor_spec,
                          output_tensor_spec=output_tensor_spec,
@@ -84,10 +91,12 @@ class MyActorNetwork(actor_network.ActorNetwork):
         self.linear_controller = linear_controller
         if controller_location is None:
             controller_location = tf.zeros(shape=input_tensor_spec.shape, dtype=tf.dtypes.float32)
+        if S is None:
+            S = [100. for i in range(input_tensor_spec.shape[0])]
         self.a = tf.Variable(initial_value=controller_location, dtype=tf.dtypes.float32, trainable=False)
         # self.S = tf.Variable(tf.ones(shape=input_tensor_spec.shape, dtype=tf.dtypes.float32),
         #                      constraint=lambda x: tf.clip_by_value(x, 0, np.infty), trainable=True)
-        self.S = tf.Variable([1000.0, 50.0, 40.0, 3.0, 2.0], trainable=True)
+        self.S = tf.Variable(S, trainable=True)
         self.r = 1
         # self.ratio = tf.Variable(tf.zeros(shape=self.S.shape, dtype=tf.dtypes.float32), name='ratio')
 
@@ -130,12 +139,14 @@ class MyActorNetwork(actor_network.ActorNetwork):
         return output_actions, network_state
 
 
+@gin.configurable
 class DDPG(tf.Module):
-    def __init__(self, train_env, linear_controller=None, controller_location=None, name='DDPG_agent'):
+    def __init__(self, train_env, linear_controller=None, controller_location=None, name='DDPG_agent', S=None):
         super().__init__(name=name)
         self.train_env = train_env
         self.actor_learning_rate = 1e-3
         self.critic_learning_rate = 1e-3
+        controller_location = np.array(controller_location)
         self.actor_network = MyActorNetwork(
             self.train_env.observation_spec(),
             self.train_env.action_spec(),
@@ -147,6 +158,7 @@ class DDPG(tf.Module):
             last_kernel_initializer=None,
             linear_controller=linear_controller,
             controller_location=controller_location,
+            S=S,
             name='DDPG_actor')
         self.critic_network = critic_network.CriticNetwork(
             (self.train_env.observation_spec(), self.train_env.action_spec()),
@@ -207,8 +219,8 @@ class DDPG(tf.Module):
         return avg_return.numpy()[0]
 
 
+@gin.configurable
 class ReplayBuffer(object):
-
     def __init__(self, ddpg, train_env, replay_buffer_capacity, initial_collect_steps, collect_steps_per_iteration):
         self.agent = ddpg.agent
         self.train_env = train_env
@@ -252,6 +264,7 @@ class ReplayBuffer(object):
         return iterator
 
 
+@gin.configurable
 def train_agent(ddpg, replay_buffer, eval_env, num_iterations, batch_size=64, initial_collect_steps=1000,
                 collect_steps_per_iteration=1, num_eval_episodes=5, log_interval=200, eval_interval=1000):
     # (Optional) Optimize by wrapping some of the code in a graph using TF function.
@@ -292,10 +305,11 @@ def train_agent(ddpg, replay_buffer, eval_env, num_iterations, batch_size=64, in
             returns.append(avg_return)
             # utils_plot(num_iterations, eval_interval, returns)
 
-            if step > int(num_iterations/5 * 4) and avg_return > best_return:
+            if step > int(num_iterations / 5 * 4) and avg_return > best_return:
                 best_return = avg_return
                 ddpg.policy_saver.save(f'policy_{step // eval_interval}')
 
     print(f'returns {returns}')
     # print(f'lambdas {lambdas}')
     print(f'Finished training for {num_iterations} iterations')
+    return ddpg
