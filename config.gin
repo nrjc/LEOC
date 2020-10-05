@@ -3,7 +3,7 @@
 # Set up controller
 
 # Shared Definitions
-import examples.envs
+import dao.envs
 load_py_env.name = 'Pendulum-v7'
 load_weight_matrix.env = @load_py_env()
 pythonenv/singleton.constructor = @load_py_env

@@ -1,11 +1,7 @@
-from typing import Tuple
-
 import gin
 from tf_agents.environments import suite_gym
 from tf_agents.environments.py_environment import PyEnvironment
 from tf_agents.environments.tf_py_environment import TFPyEnvironment
-import numpy as np
-import examples.envs
 
 from controller_utils import LQR
 

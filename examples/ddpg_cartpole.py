@@ -1,17 +1,12 @@
 import numpy as np
 import logging
 
-import tensorflow as tf
 from tf_agents.environments import suite_gym, tf_py_environment
-from tf_agents.policies import random_tf_policy
 
-from examples.envs.cartpole_env import CartPoleEnv
 from DDPG.ddpg import DDPG, ReplayBuffer, train_agent, LinearControllerLayer, MyActorNetwork
 from controller_utils import LQR
 
 logging.basicConfig(level=logging.INFO)
-from utils import load_controller_from_obj
-import os
 
 np.random.seed(0)
 

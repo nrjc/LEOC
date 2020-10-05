@@ -3,8 +3,8 @@ from typing import List
 import gym
 import numpy as np
 
-from examples.envs.cartpole_env import CartPoleEnv
-from examples.envs.mountain_car_env import Continuous_MountainCarEnv as MountainCarEnv
+from dao.envs import CartPoleEnv
+from dao.envs import Continuous_MountainCarEnv as MountainCarEnv
 
 
 class myPendulum():

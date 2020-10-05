@@ -1,13 +1,8 @@
 import argparse
 
-import gym
-import tensorflow as tf
 import tf_agents.policies.policy_loader
-import numpy as np
 from tf_agents.environments import tf_py_environment, suite_gym
 
-import examples.envs
-from DDPG.ddpg import LinearControllerLayer
 from controller_utils import LQR
 
 environment_names = ['Pendulum-v7', 'Cartpole-v7', 'Mountaincar-v7']
