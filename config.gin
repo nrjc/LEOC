@@ -1,0 +1,20 @@
+# Trainer.env =...
+# Trainer.controller = ...
+# Set up controller
+
+# Set up environment
+import examples.envs
+load_py_env.name = 'Pendulum-v7'
+load_weight_matrix.env = @load_py_env()
+load_tf_py_env.env = @load_py_env()
+
+LinearController.W = @load_weight_matrix()
+LinearController.env = @load_tf_py_env()
+RbfController.env = @load_tf_py_env()
+
+PILCOTrainer.controller = @RbfController()
+PILCOTrainer.env = @load_tf_py_env()
+PILCOTrainer.target = [1.,0.,0.]
+PILCOTrainer.weights = [2.,2.,0.3]
+PILCOTrainer.m_init = [-1.,0.,0.]
+PILCOTrainer.S_init = [0.01, 0.05, 0.01]

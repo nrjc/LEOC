@@ -8,10 +8,7 @@ from tf_agents.utils import common
 class CompleteStateObservation:
     """Counts the number of steps taken in the environment."""
 
-    def __init__(self, env_spec=(0, 3), dtype=tf.float32):
-        self.dtype = dtype
-        self.env_spec = env_spec
-        self.dtype = dtype
+    def __init__(self):
         self._storage = []
 
     def __call__(self, trajectory: tf_agents.trajectories.trajectory.Trajectory):
