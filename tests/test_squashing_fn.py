@@ -2,7 +2,6 @@ import unittest
 from typing import Callable, Optional, Tuple
 import numpy as np
 from scipy.stats import random_correlation, multivariate_normal
-
 from pilco.controllers import squash_sin
 
 
@@ -28,10 +27,19 @@ def squashing_fn(
     sample_output = np.stack(sample_output)
     sampled_means = np.mean(sample_output, axis=0)
     sampled_covariance = np.cov(sample_output.T)
-    mean_and_covariance_correct = np.allclose(M, sampled_means, atol=.03) and np.allclose(S, sampled_covariance,
-                                                                                          atol=.03)
-
+    sampled_input_output_covariance = calculate_covariance(sample_output, sampled_means, sampled_inputs, means, N, dims)
+    mean_and_covariance_correct = np.allclose(M, sampled_means, atol=.03) and \
+                                  np.allclose(S, sampled_covariance, atol=.03) and \
+                                  np.allclose(V, sampled_input_output_covariance, atol=.2)
     return mean_and_covariance_correct
+
+
+def calculate_covariance(x, ux, y, uy, N, dims):
+    acc = np.zeros((dims, dims), dtype=np.float)
+    for i in range(N):
+        x_minus_mean, y_minus_mean = x[[i], :] - ux, y[i, :] - uy
+        acc += np.matmul(x_minus_mean.T, y_minus_mean)
+    return acc / N
 
 
 def sin_squash(input: np.ndarray) -> np.ndarray:
