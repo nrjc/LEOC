@@ -44,10 +44,48 @@ def squash_sin(m, s, max_action=None):
     q = tf.exp(lq)
     S = (tf.exp(lq + s) - q) * tf.cos(tf.transpose(m) - m) \
         - (tf.exp(lq - s) - q) * tf.cos(tf.transpose(m) + m)
+
     S = max_action * tf.transpose(max_action) * S / 2
 
     C = max_action * tf.linalg.diag(tf.exp(-tf.linalg.diag_part(s) / 2) * tf.cos(m))
     return M, S, tf.reshape(C, shape=[k, k])
+
+def squash_cum_normal(m, s, cum_m=0, cum_s=1, max_action=None):
+    '''
+    Squashing function, passing the controls mean and variance through a
+    cumulative normal distribution. The output is in [-max_action, max_action].
+    Adapted from Rasmussen and Williams (2006) Chapter 3.9
+    IN: mean (m) and variance (s) of the control input
+        mean (cum_s) and variance (cum_s) of the cumulative gaussian distribution
+        max_action
+    OUT: mean (M) variance (S) and input-output (C) covariance of the squashed
+         control input
+    '''
+    k = tf.shape(m)[1]
+    if max_action is None:
+        max_action = tf.ones((1, k), dtype=float_type)  # squashes in [-1,1] by default
+    else:
+        max_action = max_action * tf.ones((1, k), dtype=float_type)
+
+    s_inv = tf.linalg.inv(s + cum_s)
+    s_inv_sqrt = tf.linalg.sqrtm(s_inv)
+    z = (m - cum_m) * s_inv_sqrt
+    cum_sigma = tf.linalg.sqrtm(cum_s)
+    test_s = tf.matmul(cum_sigma, cum_sigma)
+    check_s = s - test_s
+
+    cum_normal = tfd.Normal(loc=cum_m, scale=cum_sigma)
+    N_z = cum_normal.prob(z)
+    Phi_z = cum_normal.cdf(z)
+    Phi_z_inv = tf.linalg.inv(Phi_z)
+
+    M = m + s * N_z * Phi_z_inv * s_inv_sqrt
+    M = max_action * M
+    S = s - tf.matmul(s, s) * N_z * Phi_z_inv * s_inv * (z + N_z * Phi_z_inv)
+    S = max_action * tf.transpose(max_action) * S
+    C = None
+
+    return M, S, C
 
 @gin.configurable
 class LinearController(gpflow.Module, PyTFPolicy):
