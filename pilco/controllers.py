@@ -61,31 +61,46 @@ def squash_cum_normal(m, s, cum_m=0, cum_s=1, max_action=None):
     OUT: mean (M) variance (S) and input-output (C) covariance of the squashed
          control input
     '''
+    if tf.shape(m)[0] != 1 and tf.shape(m)[1] != 1 or tf.shape(s)[0] != 1 and tf.shape(s)[1] != 1:
+        raise Exception('Squash function only implemented for 1 dim')
+
     k = tf.shape(m)[1]
     if max_action is None:
         max_action = tf.ones((1, k), dtype=float_type)  # squashes in [-1,1] by default
     else:
         max_action = max_action * tf.ones((1, k), dtype=float_type)
 
+    if cum_m == 0:
+        cum_m = tf.zeros((1, k), dtype=float_type)
+    if cum_s == 1:
+        cum_s = tf.ones((k, k), dtype=float_type)
+
+    m = tf.cast(m, dtype=float_type)
+    s = tf.cast(s, dtype=float_type)
+    cum_m = tf.cast(cum_m, dtype=float_type)
+    cum_s = tf.cast(cum_s, dtype=float_type)
+
     s_inv = tf.linalg.inv(s + cum_s)
     s_inv_sqrt = tf.linalg.sqrtm(s_inv)
     z = (m - cum_m) * s_inv_sqrt
-    cum_sigma = tf.linalg.sqrtm(cum_s)
-    test_s = tf.matmul(cum_sigma, cum_sigma)
-    check_s = s - test_s
 
-    cum_normal = tfd.Normal(loc=cum_m, scale=cum_sigma)
-    N_z = cum_normal.prob(z)
+    normal = tfd.Normal(loc=m, scale=tf.linalg.sqrtm(s))
+    cum_normal = tfd.Normal(loc=cum_m, scale=tf.linalg.sqrtm(cum_s))
+    N_z = normal.prob(z)
     Phi_z = cum_normal.cdf(z)
     Phi_z_inv = tf.linalg.inv(Phi_z)
 
+    # Rasmussen and Williams (2006) Chapter 3.9 Eq. 3.85
     M = m + s * N_z * Phi_z_inv * s_inv_sqrt
     M = max_action * M
+    # Rasmussen and Williams (2006) Chapter 3.9 Eq. 3.87
     S = s - tf.matmul(s, s) * N_z * Phi_z_inv * s_inv * (z + N_z * Phi_z_inv)
     S = max_action * tf.transpose(max_action) * S
-    C = None
+    # Rasmussen and Williams (2006) Chapter 3.9 Eq. 3.86
+    C = 2 * m * M - tf.matmul(m, m) + s - tf.matmul(s, s) * z * N_z * Phi_z_inv * s_inv
+    C = max_action * C
 
-    return M, S, C
+    return M, S, tf.reshape(C, shape=[k, k])
 
 @gin.configurable
 class LinearController(gpflow.Module, PyTFPolicy):
@@ -123,7 +138,7 @@ class LinearController(gpflow.Module, PyTFPolicy):
         return policy_step.PolicyStep(M, (), ())
 
     def randomize(self):
-        mean = 0;
+        mean = 0
         sigma = 1
         self.W.assign(mean + sigma * np.random.normal(size=self.W.shape))
         self.b.assign(mean + sigma * np.random.normal(size=self.b.shape))
@@ -196,7 +211,7 @@ class RbfController(MGPR):
         for m in self.models:
             m.X.assign(np.random.normal(size=m.data[0].shape))
             m.Y.assign(self.max_action / 10 * np.random.normal(size=m.data[1].shape))
-            mean = 1;
+            mean = 1
             sigma = 0.1
             m.kernel.lengthscales.assign(mean + sigma * np.random.normal(size=m.kernel.lengthscales.shape))
 
@@ -330,9 +345,6 @@ class CombinedController(gpflow.Module, PyPolicy):
 
     def randomize(self):
         self.rbf_controller.randomize()
-        # mean = 0
-        # sigma = 1
-        # self.S.assign(mean + sigma * np.absolute(np.random.normal(size=self.S.shape)))
 
     def get_S(self):
         return self.S
