@@ -3,7 +3,8 @@ from typing import Tuple, List
 
 import gin
 import tensorflow as tf
-from tensorflow import TensorSpec
+from scipy.special import owens_t
+from tensorflow import TensorSpec, tanh
 from tensorflow_probability import distributions as tfd, bijectors
 import numpy as np
 import gpflow
@@ -50,7 +51,7 @@ def squash_sin(m, s, max_action=None):
     C = max_action * tf.linalg.diag(tf.exp(-tf.linalg.diag_part(s) / 2) * tf.cos(m))
     return M, S, tf.reshape(C, shape=[k, k])
 
-def squash_cum_normal(m, s, cum_m=0, cum_s=1, max_action=None):
+def squash_cum_normal(m, s, max_action=None):
     '''
     Squashing function, passing the controls mean and variance through a
     cumulative normal distribution. The output is in [-max_action, max_action].
@@ -70,37 +71,53 @@ def squash_cum_normal(m, s, cum_m=0, cum_s=1, max_action=None):
     else:
         max_action = max_action * tf.ones((1, k), dtype=float_type)
 
-    if cum_m == 0:
-        cum_m = tf.zeros((1, k), dtype=float_type)
-    if cum_s == 1:
-        cum_s = tf.ones((k, k), dtype=float_type)
-
     m = tf.cast(m, dtype=float_type)
     s = tf.cast(s, dtype=float_type)
-    cum_m = tf.cast(cum_m, dtype=float_type)
-    cum_s = tf.cast(cum_s, dtype=float_type)
+    # Enforce the cumulative normal distribution to be standard normal
+    cum_m = tf.zeros((1, k), dtype=float_type)
+    cum_s = tf.linalg.diag(tf.ones(k, dtype=float_type))
+    diag_ones = tf.linalg.diag(tf.ones(k, dtype=float_type))
+    sigma = tf.linalg.sqrtm(cum_s)
+    std_normal = tfd.Normal(loc=tf.zeros((1, k), dtype=float_type), scale=sigma)
 
-    s_inv = tf.linalg.inv(s + cum_s)
-    s_inv_sqrt = tf.linalg.sqrtm(s_inv)
-    z = (m - cum_m) * s_inv_sqrt
+    sqrt_inv_s = tf.linalg.sqrtm(tf.linalg.inv(s + cum_s))
+    z = (m - cum_m) * sqrt_inv_s
+    owenT_arg1, owenT_arg2 = z, tf.linalg.inv(tf.linalg.sqrtm(s + 2 * cum_s))
+    owenT = owens_t(owenT_arg1, owenT_arg2)
+    N_z = std_normal.prob(z)
+    Phi_z = std_normal.cdf(z)
+    C_intermediate = s * sqrt_inv_s * N_z + m * Phi_z
 
-    normal = tfd.Normal(loc=m, scale=tf.linalg.sqrtm(s))
-    cum_normal = tfd.Normal(loc=cum_m, scale=tf.linalg.sqrtm(cum_s))
-    N_z = normal.prob(z)
-    Phi_z = cum_normal.cdf(z)
-    Phi_z_inv = tf.linalg.inv(Phi_z)
-
-    # Rasmussen and Williams (2006) Chapter 3.9 Eq. 3.85
-    M = m + s * N_z * Phi_z_inv * s_inv_sqrt
-    M = max_action * M
-    # Rasmussen and Williams (2006) Chapter 3.9 Eq. 3.87
-    S = s - tf.matmul(s, s) * N_z * Phi_z_inv * s_inv * (z + N_z * Phi_z_inv)
+    # Rasmussen and Williams (2006) Chapter 3.9 Eq. 3.82
+    M = max_action * Phi_z
+    # Owen, D. (1980) A table of normal integrals. Communications in Statistics: Simulation and Computation. Eq. 20,010.4
+    S = Phi_z - 2 * owenT - tf.matmul(Phi_z, Phi_z)
     S = max_action * tf.transpose(max_action) * S
-    # Rasmussen and Williams (2006) Chapter 3.9 Eq. 3.86
-    C = 2 * m * M - tf.matmul(m, m) + s - tf.matmul(s, s) * z * N_z * Phi_z_inv * s_inv
+    # Rasmussen and Williams (2006) Chapter 3.9 Eq. 3.84
+    C = C_intermediate - tf.matmul(m, Phi_z)
     C = max_action * C
 
-    return M, S, tf.reshape(C, shape=[k, k])
+    return M, S, C
+
+def squash_tanh(m, s, max_action=None):
+    '''
+    Squashing function, passing the controls mean and variance
+    through a sinus, as in gSin.m. The output is in [-max_action, max_action].
+    IN: mean (m) and variance(s) of the control input, max_action
+    OUT: mean (M) variance (S) and input-output (C) covariance of the squashed
+         control input
+    '''
+    k = tf.shape(m)[1]
+    if max_action is None:
+        max_action = tf.ones((1, k), dtype=float_type)  # squashes in [-1,1] by default
+    else:
+        max_action = max_action * tf.ones((1, k), dtype=float_type)
+
+    M = max_action * tf.math.tanh(m)
+    sigma = tf.math.tanh(tf.linalg.sqrtm(s))
+    S = tf.matmul(max_action, max_action) * tf.matmul(sigma, sigma)
+    C = None
+    return M, S, C
 
 @gin.configurable
 class LinearController(gpflow.Module, PyTFPolicy):
