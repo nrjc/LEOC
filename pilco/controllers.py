@@ -63,7 +63,7 @@ def squash_cum_normal(m, s, max_action=None):
          control input
     '''
     if tf.shape(m)[0] != 1 and tf.shape(m)[1] != 1 or tf.shape(s)[0] != 1 and tf.shape(s)[1] != 1:
-        raise Exception('Squash function only implemented for 1 dim')
+        raise Exception('Cumulative Gaussian squash function only implemented for 1 dim')
 
     k = tf.shape(m)[1]
     if max_action is None:
@@ -76,7 +76,6 @@ def squash_cum_normal(m, s, max_action=None):
     # Enforce the cumulative normal distribution to be standard normal
     cum_m = tf.zeros((1, k), dtype=float_type)
     cum_s = tf.linalg.diag(tf.ones(k, dtype=float_type))
-    diag_ones = tf.linalg.diag(tf.ones(k, dtype=float_type))
     sigma = tf.linalg.sqrtm(cum_s)
     std_normal = tfd.Normal(loc=tf.zeros((1, k), dtype=float_type), scale=sigma)
 
@@ -90,7 +89,7 @@ def squash_cum_normal(m, s, max_action=None):
     # Owen, D. (1980) A table of normal integrals. Communications in Statistics: Simulation and Computation. Eq. 20,010.4
     owenT_arg1, owenT_arg2 = z, tf.linalg.sqrtm(tf.linalg.inv(1 + 2 * s))
     owenT = owens_t(owenT_arg1, owenT_arg2)
-    S = tf.linalg.sqrtm(s) * (Phi_z - 2 * owenT) - tf.matmul(Phi_z, Phi_z)
+    S = Phi_z - 2 * owenT - tf.matmul(Phi_z, Phi_z)
     S = max_action * tf.transpose(max_action) * S
     # Rasmussen and Williams (2006) Chapter 3.9 Eq. 3.84
     C_intermediate = s * sqrt_inv_s * N_z + m * Phi_z
@@ -99,25 +98,6 @@ def squash_cum_normal(m, s, max_action=None):
 
     return M, S, C
 
-def squash_tanh(m, s, max_action=None):
-    '''
-    Squashing function, passing the controls mean and variance
-    through a sinus, as in gSin.m. The output is in [-max_action, max_action].
-    IN: mean (m) and variance(s) of the control input, max_action
-    OUT: mean (M) variance (S) and input-output (C) covariance of the squashed
-         control input
-    '''
-    k = tf.shape(m)[1]
-    if max_action is None:
-        max_action = tf.ones((1, k), dtype=float_type)  # squashes in [-1,1] by default
-    else:
-        max_action = max_action * tf.ones((1, k), dtype=float_type)
-
-    M = max_action * tf.math.tanh(m)
-    sigma = tf.math.tanh(tf.linalg.sqrtm(s))
-    S = tf.matmul(max_action, max_action) * tf.matmul(sigma, sigma)
-    C = None
-    return M, S, C
 
 @gin.configurable
 class LinearController(gpflow.Module, PyTFPolicy):
