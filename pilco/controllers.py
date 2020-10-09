@@ -82,18 +82,18 @@ def squash_cum_normal(m, s, max_action=None):
 
     sqrt_inv_s = tf.linalg.sqrtm(tf.linalg.inv(s + cum_s))
     z = (m - cum_m) * sqrt_inv_s
-    owenT_arg1, owenT_arg2 = z, tf.linalg.inv(tf.linalg.sqrtm(s + 2 * cum_s))
-    owenT = owens_t(owenT_arg1, owenT_arg2)
     N_z = std_normal.prob(z)
     Phi_z = std_normal.cdf(z)
-    C_intermediate = s * sqrt_inv_s * N_z + m * Phi_z
 
     # Rasmussen and Williams (2006) Chapter 3.9 Eq. 3.82
     M = max_action * Phi_z
     # Owen, D. (1980) A table of normal integrals. Communications in Statistics: Simulation and Computation. Eq. 20,010.4
-    S = Phi_z - 2 * owenT - tf.matmul(Phi_z, Phi_z)
+    owenT_arg1, owenT_arg2 = z, tf.linalg.sqrtm(tf.linalg.inv(1 + 2 * s))
+    owenT = owens_t(owenT_arg1, owenT_arg2)
+    S = tf.linalg.sqrtm(s) * (Phi_z - 2 * owenT) - tf.matmul(Phi_z, Phi_z)
     S = max_action * tf.transpose(max_action) * S
     # Rasmussen and Williams (2006) Chapter 3.9 Eq. 3.84
+    C_intermediate = s * sqrt_inv_s * N_z + m * Phi_z
     C = C_intermediate - tf.matmul(m, Phi_z)
     C = max_action * C
 
