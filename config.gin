@@ -15,12 +15,14 @@ LinearController.W = @load_weight_matrix()
 LinearController.env = @pythontfenv/singleton()
 RbfController.env = @pythontfenv/singleton()
 
-PILCOTrainer.controller = @RbfController()
 PILCOTrainer.env = @pythontfenv/singleton()
-PILCOTrainer.target = [1.,0.,0.]
-PILCOTrainer.weights = [2.,2.,0.3]
-PILCOTrainer.m_init = [-1.,0.,0.]
-PILCOTrainer.S_init = [0.01, 0.05, 0.01]
+
+train_pilco.env = @pythonenv/singleton()
+train_pilco.controller = @RbfController()
+train_pilco.target = [1.,0.,0.]
+train_pilco.weights = [2.,2.,0.3]
+train_pilco.m_init = [-1.,0.,0.]
+train_pilco.S_init = [0.01, 0.05, 0.01]
 
 # DDPG exclusives
 ddpgsingleton/singleton.constructor = @DDPG
@@ -35,13 +37,13 @@ DDPGTrainer.ddpg = @ddpgsingleton/singleton()
 LinearControllerLayer.W = @load_weight_matrix()
 LinearControllerLayer.env = @pythontfenv/singleton()
 
-train_agent.ddpg = @ddpgsingleton/singleton()
-train_agent.replay_buffer = @ReplayBuffer()
-train_agent.eval_env =  @pythontfenv/singleton()
-train_agent.num_iterations =20000
+train_ddpg.ddpg = @ddpgsingleton/singleton()
+train_ddpg.replay_buffer = @ReplayBuffer()
+train_ddpg.eval_env = @pythontfenv/singleton()
+train_ddpg.num_iterations = 20000
 
 ReplayBuffer.ddpg = @ddpgsingleton/singleton()
 ReplayBuffer.train_env = @pythontfenv/singleton()
-ReplayBuffer.replay_buffer_capacity =100000
+ReplayBuffer.replay_buffer_capacity = 100000
 ReplayBuffer.initial_collect_steps = 1000
 ReplayBuffer.collect_steps_per_iteration = 1

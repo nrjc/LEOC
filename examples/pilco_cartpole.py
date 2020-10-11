@@ -10,7 +10,7 @@ from pilco.controllers import LinearController, CombinedController
 from controller_utils import LQR, calculate_ratio
 from pilco.plotting_utils import plot_single_rollout_cycle
 from pilco.rewards import ExponentialReward
-from utils import rollout, save_gpflow_obj_to_path
+from pilco.utils import rollout, save_gpflow_obj_to_path
 import os
 np.random.seed(0)
 

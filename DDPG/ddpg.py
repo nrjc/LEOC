@@ -146,7 +146,6 @@ class DDPG(tf.Module):
         self.train_env = train_env
         self.actor_learning_rate = 1e-3
         self.critic_learning_rate = 1e-3
-        controller_location = np.array(controller_location)
         self.actor_network = MyActorNetwork(
             self.train_env.observation_spec(),
             self.train_env.action_spec(),
@@ -157,7 +156,7 @@ class DDPG(tf.Module):
             kernel_initializer=None,
             last_kernel_initializer=None,
             linear_controller=linear_controller,
-            controller_location=controller_location,
+            controller_location=np.array(controller_location),
             S=S,
             name='DDPG_actor')
         self.critic_network = critic_network.CriticNetwork(
@@ -265,8 +264,8 @@ class ReplayBuffer(object):
 
 
 @gin.configurable
-def train_agent(ddpg, replay_buffer, eval_env, num_iterations, batch_size=64, initial_collect_steps=1000,
-                collect_steps_per_iteration=1, num_eval_episodes=5, log_interval=200, eval_interval=1000):
+def train_ddpg(ddpg, replay_buffer, eval_env, num_iterations, batch_size=64, initial_collect_steps=1000,
+               collect_steps_per_iteration=1, num_eval_episodes=5, log_interval=200, eval_interval=1000):
     # (Optional) Optimize by wrapping some of the code in a graph using TF function.
     ddpg.agent.train = common.function(ddpg.agent.train)
 
