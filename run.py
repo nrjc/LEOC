@@ -6,11 +6,18 @@ from dao.trainer import DDPGTrainer
 import dao.envs
 import gin
 gin.parse_config_file('config.gin')
-# #%%
-# ddpg_trainer = DDPGTrainer()
+#%%
+ddpg_trainer = DDPGTrainer()
 # #%%
 # ddpg_trainer.train()
 #%%
+# ddpg_trainer.save()
+#%%
+# ddpg_trainer.load()
+#%%
 pilco_trainer = PILCOTrainer()
 #%%
-pilco_trainer.train()
+pilco_trainer.save()
+#%%
+pilco_trainer.load()
+# pilco_trainer.train()

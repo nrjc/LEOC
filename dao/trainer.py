@@ -1,6 +1,7 @@
 from typing import List, Union
 
 import gin
+import gpflow
 import gym
 from gpflow import set_trainable
 from tf_agents.agents import DdpgAgent
@@ -18,9 +19,12 @@ from pilco.rewards import ExponentialReward
 from utils import rollout
 import tensorflow as tf
 
+
 class Trainer:
-    def __init__(self, env: TFPyEnvironment):
+    def __init__(self, env: TFPyEnvironment, model: tf.Module, saved_path=None):
         self.env = env
+        self.model = model
+        self.saved_path = saved_path
 
     def train(self) -> tf.Module:
         raise NotImplementedError
@@ -28,15 +32,21 @@ class Trainer:
     def eval(self) -> List[Trajectory]:
         raise NotImplementedError
 
+    def save(self):
+        tf.saved_model.save(self.model, self.saved_path)
+
+    def load(self):
+        self.model = tf.saved_model.load(self.saved_path)
+
 
 @gin.configurable
 class DDPGTrainer(Trainer):
-    def __init__(self, env: TFPyEnvironment, ddpg: DDPG):
-        super().__init__(env)
-        self.ddpg_agent = ddpg.agent
+    def __init__(self, env: TFPyEnvironment, ddpg: DDPG, saved_path: str):
+        super().__init__(env, ddpg.agent, saved_path)
 
     def train(self) -> DDPG:
-        return train_agent()
+        trained_ddpg = train_agent()
+        return trained_ddpg
 
     def eval(self) -> List[Trajectory]:
         num_episodes = tf_metrics.NumberOfEpisodes()
@@ -51,12 +61,12 @@ class DDPGTrainer(Trainer):
 
 @gin.configurable
 class PILCOTrainer(Trainer):
-    def __init__(self, env: TFPyEnvironment, controller: Union[PyPolicy, tf.Module], target: List[float], weights: List[float],
+    def __init__(self, env: TFPyEnvironment, controller: Union[PyPolicy, tf.Module], target: List[float],
+                 weights: List[float],
                  m_init: List[float], S_init: List[float],
                  initial_num_rollout: int = 3, training_rollout_total_num: int = 15, timesteps: int = 40, subs: int = 3,
-                 max_iter_policy_train: int = 50, max_training_restarts: int = 2):
-        super().__init__(env)
-        self.controller = controller
+                 max_iter_policy_train: int = 50, max_training_restarts: int = 2, saved_path: str = None):
+        super().__init__(env, controller, saved_path)
         self.target = np.array(target)
         self.weights = np.diag(weights)
         self.initial_num_rollout = initial_num_rollout
@@ -71,7 +81,7 @@ class PILCOTrainer(Trainer):
 
     def train(self) -> tf.Module:
         R = ExponentialReward(state_dim=self.env.observation_spec().shape[0], t=self.target, W=self.weights)
-        env = self.env.envs[0]._env.gym # Dirty hacks all around
+        env = self.env.envs[0]._env.gym  # Dirty hacks all around
         # Initial random rollouts to generate a dataset
         X, Y, _, _ = rollout(env=env, pilco=None, timesteps=self.timesteps, random=True, SUBS=self.subs, render=True,
                              verbose=False)
@@ -81,7 +91,7 @@ class PILCOTrainer(Trainer):
                                    verbose=False)
             X = np.vstack((X, X_))
             Y = np.vstack((Y, Y_))
-        pilco = PILCO((X, Y), controller=self.controller, horizon=self.timesteps, reward=R, m_init=self.m_init,
+        pilco = PILCO((X, Y), controller=self.model, horizon=self.timesteps, reward=R, m_init=self.m_init,
                       S_init=self.S_init)
 
         # for numerical stability, we can set the likelihood variance parameters of the GP models
@@ -107,7 +117,11 @@ class PILCOTrainer(Trainer):
             X = np.vstack((X, X_new))
             Y = np.vstack((Y, Y_new))
             pilco.mgpr.set_data((X, Y))
-        return self.controller
+        return self.model
+
+    # def save(self):
+    #     output_model = gpflow.utilities.freeze(self.model)
+    #     tf.saved_model.save(output_model, self.saved_path)
 
     def eval(self) -> List[Trajectory]:
         num_episodes = tf_metrics.NumberOfEpisodes()
@@ -115,6 +129,6 @@ class PILCOTrainer(Trainer):
         state_obs = CompleteStateObservation()
         observers = [num_episodes, env_steps, state_obs]
         driver = dynamic_episode_driver.DynamicEpisodeDriver(
-            self.env, self.controller, observers, num_episodes=2)
+            self.env, self.model, observers, num_episodes=2)
         final_time_step, _ = driver.run(policy_state=())
         return state_obs.result()
