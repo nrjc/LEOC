@@ -3,7 +3,8 @@ from typing import Tuple, List
 
 import gin
 import tensorflow as tf
-from tensorflow import TensorSpec
+from scipy.special import owens_t
+from tensorflow import TensorSpec, tanh
 from tensorflow_probability import distributions as tfd, bijectors
 import numpy as np
 import gpflow
@@ -44,10 +45,59 @@ def squash_sin(m, s, max_action=None):
     q = tf.exp(lq)
     S = (tf.exp(lq + s) - q) * tf.cos(tf.transpose(m) - m) \
         - (tf.exp(lq - s) - q) * tf.cos(tf.transpose(m) + m)
+
     S = max_action * tf.transpose(max_action) * S / 2
 
     C = max_action * tf.linalg.diag(tf.exp(-tf.linalg.diag_part(s) / 2) * tf.cos(m))
     return M, S, tf.reshape(C, shape=[k, k])
+
+def squash_cum_normal(m, s, max_action=None):
+    '''
+    Squashing function, passing the controls mean and variance through a
+    cumulative normal distribution. The output is in [-max_action, max_action].
+    Adapted from Rasmussen and Williams (2006) Chapter 3.9
+    IN: mean (m) and variance (s) of the control input
+        mean (cum_s) and variance (cum_s) of the cumulative gaussian distribution
+        max_action
+    OUT: mean (M) variance (S) and input-output (C) covariance of the squashed
+         control input
+    '''
+    if tf.shape(m)[0] != 1 and tf.shape(m)[1] != 1 or tf.shape(s)[0] != 1 and tf.shape(s)[1] != 1:
+        raise Exception('Cumulative Gaussian squash function only implemented for 1 dim')
+
+    k = tf.shape(m)[1]
+    if max_action is None:
+        max_action = tf.ones((1, k), dtype=float_type)  # squashes in [-1,1] by default
+    else:
+        max_action = max_action * tf.ones((1, k), dtype=float_type)
+
+    m = tf.cast(m, dtype=float_type)
+    s = tf.cast(s, dtype=float_type)
+    # Enforce the cumulative normal distribution to be standard normal
+    cum_m = tf.zeros((1, k), dtype=float_type)
+    cum_s = tf.linalg.diag(tf.ones(k, dtype=float_type))
+    sigma = tf.linalg.sqrtm(cum_s)
+    std_normal = tfd.Normal(loc=tf.zeros((1, k), dtype=float_type), scale=sigma)
+
+    sqrt_inv_s = tf.linalg.sqrtm(tf.linalg.inv(s + cum_s))
+    z = (m - cum_m) * sqrt_inv_s
+    N_z = std_normal.prob(z)
+    Phi_z = std_normal.cdf(z)
+
+    # Rasmussen and Williams (2006) Chapter 3.9 Eq. 3.82
+    M = max_action * Phi_z
+    # Owen, D. (1980) A table of normal integrals. Communications in Statistics: Simulation and Computation. Eq. 20,010.4
+    owenT_arg1, owenT_arg2 = z, tf.linalg.sqrtm(tf.linalg.inv(1 + 2 * s))
+    owenT = owens_t(owenT_arg1, owenT_arg2)
+    S = Phi_z - 2 * owenT - tf.matmul(Phi_z, Phi_z)
+    S = max_action * tf.transpose(max_action) * S
+    # Rasmussen and Williams (2006) Chapter 3.9 Eq. 3.84
+    C_intermediate = s * sqrt_inv_s * N_z + m * Phi_z
+    C = C_intermediate - tf.matmul(m, Phi_z)
+    C = max_action * C
+
+    return M, S, C
+
 
 @gin.configurable
 class LinearController(gpflow.Module, PyTFPolicy):
@@ -85,7 +135,7 @@ class LinearController(gpflow.Module, PyTFPolicy):
         return policy_step.PolicyStep(M, (), ())
 
     def randomize(self):
-        mean = 0;
+        mean = 0
         sigma = 1
         self.W.assign(mean + sigma * np.random.normal(size=self.W.shape))
         self.b.assign(mean + sigma * np.random.normal(size=self.b.shape))
@@ -158,7 +208,7 @@ class RbfController(MGPR):
         for m in self.models:
             m.X.assign(np.random.normal(size=m.data[0].shape))
             m.Y.assign(self.max_action / 10 * np.random.normal(size=m.data[1].shape))
-            mean = 1;
+            mean = 1
             sigma = 0.1
             m.kernel.lengthscales.assign(mean + sigma * np.random.normal(size=m.kernel.lengthscales.shape))
 
@@ -292,9 +342,6 @@ class CombinedController(gpflow.Module, PyPolicy):
 
     def randomize(self):
         self.rbf_controller.randomize()
-        # mean = 0
-        # sigma = 1
-        # self.S.assign(mean + sigma * np.absolute(np.random.normal(size=self.S.shape)))
 
     def get_S(self):
         return self.S

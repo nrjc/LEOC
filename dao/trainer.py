@@ -1,6 +1,8 @@
 from typing import List, Union
 
 import gin
+import gpflow
+import gym
 from gpflow import set_trainable
 from tf_agents.drivers import dynamic_episode_driver
 from tf_agents.environments.tf_py_environment import TFPyEnvironment
@@ -16,8 +18,10 @@ import tensorflow as tf
 
 
 class Trainer:
-    def __init__(self, env: TFPyEnvironment):
+    def __init__(self, env: TFPyEnvironment, model: tf.Module, saved_path=None):
         self.env = env
+        self.model = model
+        self.saved_path = saved_path
 
     def train(self) -> tf.Module:
         raise NotImplementedError
@@ -25,12 +29,17 @@ class Trainer:
     def eval(self) -> List[Trajectory]:
         raise NotImplementedError
 
+    def save(self):
+        tf.saved_model.save(self.model, self.saved_path)
+
+    def load(self):
+        self.model = tf.saved_model.load(self.saved_path)
+
 
 @gin.configurable
 class DDPGTrainer(Trainer):
-    def __init__(self, env: TFPyEnvironment, ddpg: DDPG):
-        super().__init__(env)
-        self.ddpg_agent = ddpg.agent
+    def __init__(self, env: TFPyEnvironment, ddpg: DDPG, saved_path: str):
+        super().__init__(env, ddpg.agent, saved_path)
 
     def train(self) -> DDPG:
         return train_ddpg()
@@ -48,8 +57,8 @@ class DDPGTrainer(Trainer):
 
 @gin.configurable
 class PILCOTrainer(Trainer):
-    def __init__(self, env: TFPyEnvironment):
-        super().__init__(env)
+    def __init__(self, env: TFPyEnvironment, controller: tf.Module, saved_path: str):
+        super().__init__(env, controller, saved_path)
 
     def train(self) -> tf.Module:
         train_pilco()

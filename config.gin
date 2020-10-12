@@ -15,10 +15,13 @@ LinearController.W = @load_weight_matrix()
 LinearController.env = @pythontfenv/singleton()
 RbfController.env = @pythontfenv/singleton()
 
+pythonrbfcontroller/singleton.constructor = @RbfController
+PILCOTrainer.saved_path = 'data/1'
+PILCOTrainer.controller = @pythonrbfcontroller/singleton()
 PILCOTrainer.env = @pythontfenv/singleton()
 
 train_pilco.env = @pythonenv/singleton()
-train_pilco.controller = @RbfController()
+train_pilco.controller = @pythonrbfcontroller/singleton()
 train_pilco.target = [1.,0.,0.]
 train_pilco.weights = [2.,2.,0.3]
 train_pilco.m_init = [-1.,0.,0.]
@@ -34,6 +37,7 @@ DDPG.linear_controller = @LinearControllerLayer()
 
 DDPGTrainer.env = @pythontfenv/singleton()
 DDPGTrainer.ddpg = @ddpgsingleton/singleton()
+DDPGTrainer.saved_path = 'data/1'
 LinearControllerLayer.W = @load_weight_matrix()
 LinearControllerLayer.env = @pythontfenv/singleton()
 
