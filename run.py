@@ -17,7 +17,9 @@ ddpg_trainer.load()
 #%%
 pilco_trainer = PILCOTrainer()
 #%%
+pilco_trainer.train()
+#%%
 pilco_trainer.save()
 #%%
 pilco_trainer.load()
-# pilco_trainer.train()
+
