@@ -3,7 +3,7 @@ from tf_agents.environments import suite_gym
 from tf_agents.environments.py_environment import PyEnvironment
 from tf_agents.environments.tf_py_environment import TFPyEnvironment
 
-from controller_utils import LQR
+from dao.controller_utils import LQR
 
 
 @gin.configurable
@@ -17,7 +17,7 @@ def load_weight_matrix(env: PyEnvironment):
     W_matrix = None
     try:
         A, B, C, Q = env.control()
-        W_matrix = LQR().get_W_matrix(A, B, Q, env='swing up')
+        W_matrix = LQR().get_W_matrix(A, B, Q, env='swingup')
     except Exception:
         pass
     return W_matrix
