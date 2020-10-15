@@ -22,8 +22,11 @@ def train_pilco(env: PyEnvironment, controller: Union[PyPolicy, tf.Module], targ
                 initial_num_rollout: int = 3, timesteps: int = 40, subs: int = 3, max_iter_policy_train: int = 50,
                 max_training_restarts: int = 2, max_policy_restarts: int = 2) \
         -> tf.Module:
-    target, weights = np.array(target), np.diag(weights)
-    m_init, S_init = np.reshape(m_init, (1, -1)), np.diag(S_init)
+
+    target = np.array(target, dtype=float_type)
+    weights = np.array(np.diag(weights), dtype=float_type)
+    m_init = np.array(np.reshape(m_init, (1, -1)), dtype=float_type)
+    S_init = np.array(np.diag(S_init), dtype=float_type)
 
     R = ExponentialReward(state_dim=env.observation_spec().shape[0], t=target, W=weights)
     env = env._env.gym  # Dirty hacks all around

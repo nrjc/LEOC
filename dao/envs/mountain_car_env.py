@@ -17,6 +17,8 @@ import gym
 from gym import spaces, logger
 from gym.utils import seeding
 
+float_type = np.float32
+
 
 class Continuous_MountainCarEnv(gym.Env):
     metadata = {
@@ -186,7 +188,7 @@ class Continuous_MountainCarEnv(gym.Env):
     def _get_obs(self):
         position, velocity = self.state
         obs = np.array([position, velocity]).reshape(-1)
-        return obs
+        return np.array(obs, dtype=float_type)
 
     def mutate_with_noise(self, noise_mag, arg_names: List[str]):
         for k in arg_names:

@@ -12,6 +12,8 @@ from gym import spaces, logger
 from gym.utils import seeding
 import numpy as np
 
+float_type = np.float32
+
 
 class CartPoleEnv(gym.Env):
     """
@@ -236,7 +238,7 @@ class CartPoleEnv(gym.Env):
     def _get_obs(self):
         x, x_dot, theta, theta_dot = self.state
         obs = np.array([x, x_dot, np.cos(theta), np.sin(theta), theta_dot]).reshape(-1)
-        return obs
+        return np.array(obs, dtype=float_type)
 
     def mutate_with_noise(self, noise_mag, arg_names: List[str]):
         for k in arg_names:

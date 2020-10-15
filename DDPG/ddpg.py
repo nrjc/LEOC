@@ -26,6 +26,8 @@ from tf_agents.replay_buffers import tf_uniform_replay_buffer
 from tf_agents.trajectories import trajectory
 from tf_agents.utils import common
 import gin
+from gpflow import config
+float_type = config.default_float()
 
 tf.compat.v1.enable_v2_behavior()
 
@@ -44,12 +46,12 @@ class LinearControllerLayer(tf.Module):
         state_dim = env.observation_spec().shape[0]
         control_dim = env.action_spec().shape[0]
         if W is None:
-            self.w = tf.Variable(tf.random.normal([control_dim, state_dim]), dtype=tf.dtypes.float32, trainable=True,
+            self.w = tf.Variable(tf.random.normal([control_dim, state_dim]), dtype=float_type, trainable=True,
                                  name='W')
-            self.b = tf.Variable(tf.zeros([control_dim]), dtype=tf.dtypes.float32, trainable=False, name='b')
+            self.b = tf.Variable(tf.zeros([control_dim]), dtype=float_type, trainable=False, name='b')
         else:
-            self.W = tf.Variable(W, dtype=tf.dtypes.float32, trainable=False, name='W')
-            self.b = tf.Variable(tf.zeros([control_dim]), dtype=tf.dtypes.float32, trainable=False, name='b')
+            self.W = tf.Variable(W, dtype=float_type, trainable=False, name='W')
+            self.b = tf.Variable(tf.zeros([control_dim]), dtype=float_type, trainable=False, name='b')
 
     @tf.function
     def __call__(self, x):
@@ -58,7 +60,7 @@ class LinearControllerLayer(tf.Module):
         IN: state (x)
         OUT: action (y)
         '''
-        x = tf.cast(x, dtype=tf.dtypes.float32, name='state')
+        x = tf.cast(x, dtype=float_type, name='state')
         y = x @ tf.transpose(self.W) + self.b
         return y
 
@@ -89,15 +91,15 @@ class MyActorNetwork(actor_network.ActorNetwork):
                          )
         self.linear_controller = linear_controller
         if controller_location is None:
-            controller_location = tf.zeros(shape=input_tensor_spec.shape, dtype=tf.dtypes.float32)
+            controller_location = tf.zeros(shape=input_tensor_spec.shape, dtype=float_type)
         if S is None:
             S = [100. for i in range(input_tensor_spec.shape[0])]
-        self.a = tf.Variable(initial_value=controller_location, dtype=tf.dtypes.float32, trainable=False)
-        # self.S = tf.Variable(tf.ones(shape=input_tensor_spec.shape, dtype=tf.dtypes.float32),
+        self.a = tf.Variable(initial_value=controller_location, dtype=float_type, trainable=False)
+        # self.S = tf.Variable(tf.ones(shape=input_tensor_spec.shape, dtype=float_type),
         #                      constraint=lambda x: tf.clip_by_value(x, 0, np.infty), trainable=True)
         self.S = tf.Variable(S, trainable=True)
         self.r = 1
-        # self.ratio = tf.Variable(tf.zeros(shape=self.S.shape, dtype=tf.dtypes.float32), name='ratio')
+        # self.ratio = tf.Variable(tf.zeros(shape=self.S.shape, dtype=float_type), name='ratio')
 
     def compute_ratio(self, x):
         '''

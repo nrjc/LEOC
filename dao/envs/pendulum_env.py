@@ -2,6 +2,8 @@ from typing import List
 from gym.envs.classic_control import PendulumEnv
 import numpy as np
 
+float_type = np.float32
+
 
 class SwingUpEnv(PendulumEnv):
     def __init__(self, initialize_top=False, name=None):
@@ -11,14 +13,18 @@ class SwingUpEnv(PendulumEnv):
 
     def reset(self):
         if self.up:
-            self.state = [np.pi / 180, 0.0]
+            self.state = np.array([np.pi / 180, 0.0])
         else:
-            self.state = [np.pi, 0.0]
+            self.state = np.array([np.pi, 0.0])
         high = np.array([np.pi/180 * 90, 0.5])
         noise = self.np_random.uniform(low=-high, high=high)
         self.state = self.state + noise
         self.last_u = None
         return self._get_obs()
+
+    def _get_obs(self):
+        theta, thetadot = self.state
+        return np.array([np.cos(theta), np.sin(theta), thetadot], dtype=float_type)
 
     def mutate_with_noise(self, noise_mag, arg_names: List[str]):
         for k in arg_names:

@@ -19,12 +19,10 @@ from tf_agents.policies.tf_policy import TFPolicy
 from tf_agents.trajectories import time_step as ts, policy_step
 from tf_agents.typing import types
 
-f64 = gpflow.utilities.to_default_float
-
 from .models import MGPR
 
 float_type = gpflow.config.default_float()
-# float_type = tf.float32
+
 
 def squash_sin(m, s, max_action=None):
     '''
@@ -145,7 +143,6 @@ class LinearController(gpflow.Module, TFPolicy):
         policy_state = ()  # Need to confirm policy state is not needed
         return policy_step.PolicyStep(action_distribution, policy_state)
 
-
     def randomize(self):
         mean = 0
         sigma = 1
@@ -194,7 +191,8 @@ class RbfController(MGPR, TFPolicy):
             kernel = gpflow.kernels.SquaredExponential(lengthscales=tf.ones([data[0].shape[1], ], dtype=float_type))
             transformed_lengthscales = Parameter(kernel.lengthscales, transform=positive(lower=1e-3))
             kernel.lengthscales = transformed_lengthscales
-            kernel.lengthscales.prior = tfd.Gamma(f64(1.1), f64(1 / 10.0))
+            kernel.lengthscales.prior = tfd.Gamma(gpflow.utilities.to_default_float(1.1),
+                                                  gpflow.utilities.to_default_float(1 / 10.0))
             if i == 0:
                 self.models.append(FakeGPR((data[0], data[1][:, i:i + 1]), kernel))
             else:
@@ -257,7 +255,7 @@ class RbfController(MGPR, TFPolicy):
         N = loc.shape[0]
 
         mid_p = self.compute_action(tf.reshape(tf.convert_to_tensor(loc), (1, -1)),
-                                    tf.zeros([N, N], dtype=tf.dtypes.float64),
+                                    tf.zeros([N, N], dtype=float_type),
                                     squash=True)[0].numpy()
         epsilon = 1e-6
         weight = np.zeros_like(loc)
@@ -267,7 +265,7 @@ class RbfController(MGPR, TFPolicy):
             small_delta[i] = epsilon
             loc_temp += small_delta
             weight[i] = (self.compute_action(tf.reshape(tf.convert_to_tensor(loc_temp), (1, -1)),
-                                             tf.zeros([N, N], dtype=tf.dtypes.float64),
+                                             tf.zeros([N, N], dtype=float_type),
                                              squash=True)[0] - mid_p) / epsilon
         bias = mid_p - weight @ loc
 
