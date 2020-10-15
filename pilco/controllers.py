@@ -6,6 +6,7 @@ import tensorflow as tf
 from scipy.special import owens_t
 from tensorflow import TensorSpec, tanh
 from tensorflow_probability import distributions as tfd, bijectors
+import tensorflow_probability as tfp
 import numpy as np
 import gpflow
 from gpflow import Parameter
@@ -23,7 +24,7 @@ f64 = gpflow.utilities.to_default_float
 from .models import MGPR
 
 float_type = gpflow.config.default_float()
-
+# float_type = tf.float32
 
 def squash_sin(m, s, max_action=None):
     '''
@@ -50,6 +51,7 @@ def squash_sin(m, s, max_action=None):
 
     C = max_action * tf.linalg.diag(tf.exp(-tf.linalg.diag_part(s) / 2) * tf.cos(m))
     return M, S, tf.reshape(C, shape=[k, k])
+
 
 def squash_cum_normal(m, s, max_action=None):
     '''
@@ -99,21 +101,27 @@ def squash_cum_normal(m, s, max_action=None):
     return M, S, C
 
 
+def to_distribution(action_or_distribution):
+    if isinstance(action_or_distribution, tf.Tensor):
+        # This is an action tensor, so wrap it in a deterministic distribution.
+        return tfp.distributions.Deterministic(loc=action_or_distribution)
+    return action_or_distribution
+
+
 @gin.configurable
-class LinearController(gpflow.Module, PyTFPolicy):
+class LinearController(gpflow.Module, TFPolicy):
     def __init__(self, env: TFPyEnvironment, W=None, b=None, trainable=False):
         gpflow.Module.__init__(self)
         state_dim = env.observation_spec().shape[0]
         control_dim = env.action_spec().shape[0]
         self.max_action = float(env.action_spec().maximum.max())
-        PyPolicy.__init__(self, env.time_step_spec(), env.action_spec())
-        PyTFPolicy.__init__(self, self)
-        self.state_dim = state_dim
+        TFPolicy.__init__(self, time_step_spec=env.time_step_spec(), action_spec=env.action_spec())
+
         if W is None:
             self.W = Parameter(np.random.rand(control_dim, state_dim), dtype=float_type, trainable=trainable)
         else:
             self.W = Parameter(W, dtype=float_type, trainable=trainable)
-        self.b = Parameter(np.zeros((1, control_dim), dtype=float_type), dtype=float_type, trainable=trainable)
+        self.b = Parameter(np.zeros((1, control_dim)), dtype=float_type, trainable=trainable)
 
     def compute_action(self, m, s, squash=True):
         '''
@@ -129,10 +137,14 @@ class LinearController(gpflow.Module, PyTFPolicy):
             V = V @ V2
         return M, S, V
 
-    def _action(self, time_step: ts.TimeStep, policy_state: types.NestedArray) -> policy_step.PolicyStep:
+    def _distribution(self, time_step: ts.TimeStep, policy_state: types.NestedTensorSpec) -> policy_step.PolicyStep:
         obs = time_step.observation
-        M, S, V = self.compute_action(obs, tf.zeros((self.state_dim, self.state_dim), float_type), True)
-        return policy_step.PolicyStep(M, (), ())
+        M, _, _ = self.compute_action(obs, tf.zeros((self.state_dim, self.state_dim), float_type), True)
+
+        action_distribution = tf.nest.map_structure(to_distribution, M)
+        policy_state = ()  # Need to confirm policy state is not needed
+        return policy_step.PolicyStep(action_distribution, policy_state)
+
 
     def randomize(self):
         mean = 0
@@ -155,8 +167,9 @@ class FakeGPR(gpflow.Module):
         self.likelihood.variance.assign(likelihood_variance)
         set_trainable(self.likelihood.variance, False)
 
+
 @gin.configurable
-class RbfController(MGPR):
+class RbfController(MGPR, TFPolicy):
     '''
     An RBF Controller implemented as a deterministic GP
     See Deisenroth et al 2015: Gaussian Processes for Data-Efficient Learning in Robotics and Control
@@ -164,17 +177,16 @@ class RbfController(MGPR):
     '''
 
     def __init__(self, env: TFPyEnvironment, num_basis_functions=60):
-        state_dim = env.observation_spec().shape[0]
-        control_dim = env.action_spec().shape[0]
-        max_action = float(env.action_spec().maximum.max())
+        self.state_dim = env.observation_spec().shape[0]
+        self.control_dim = env.action_spec().shape[0]
+        self.max_action = float(env.action_spec().maximum.max())
+        TFPolicy.__init__(self, time_step_spec=env.time_step_spec(), action_spec=env.action_spec())
         MGPR.__init__(self,
-                      [np.random.randn(num_basis_functions, state_dim),
-                       0.1 * np.random.randn(num_basis_functions, control_dim)]
-                      )
+                      [np.random.randn(num_basis_functions, self.state_dim),
+                       0.1 * np.random.randn(num_basis_functions, self.control_dim)])
         for model in self.models:
             model.kernel.variance.assign(1.0)
             set_trainable(model.kernel.variance, False)
-        self.max_action = max_action
 
     def create_models(self, data):
         self.models = []
@@ -202,6 +214,14 @@ class RbfController(MGPR):
             M, S, V2 = squash_sin(M, S, self.max_action)
             V = V @ V2
         return M, S, V
+
+    def _distribution(self, time_step: ts.TimeStep, policy_state: types.NestedTensorSpec) -> policy_step.PolicyStep:
+        obs = time_step.observation
+        M, _, _ = self.compute_action(obs, tf.zeros((self.state_dim, self.state_dim), float_type), True)
+
+        action_distribution = tf.nest.map_structure(to_distribution, M)
+        policy_state = ()  # Need to confirm policy state is not needed
+        return policy_step.PolicyStep(action_distribution, policy_state)
 
     def randomize(self):
         print("Randomising controller")
@@ -286,7 +306,7 @@ class RbfController(MGPR):
 
 
 @gin.configurable
-class CombinedController(gpflow.Module, PyPolicy):
+class HybridController(gpflow.Module, TFPolicy):
     '''
     An RBF Controller implemented as a deterministic GP
     See Deisenroth et al 2015: Gaussian Processes for Data-Efficient Learning in Robotics and Control
@@ -297,7 +317,9 @@ class CombinedController(gpflow.Module, PyPolicy):
         gpflow.Module.__init__(self)
         state_dim = env.observation_spec().shape[0]
         control_dim = env.action_spec().shape[0]
-        max_action = float(env.action_spec().maximum.max())
+        self.max_action = float(env.action_spec().maximum.max())
+        TFPolicy.__init__(self, time_step_spec=env.time_step_spec(), action_spec=env.action_spec())
+
         if controller_location is None:
             controller_location = np.zeros((1, state_dim), float_type)
         self.rbf_controller = RbfController(env, num_basis_functions)
@@ -305,7 +327,6 @@ class CombinedController(gpflow.Module, PyPolicy):
         self.a = Parameter(controller_location, trainable=False)
         self.S = Parameter(5 * np.ones(state_dim, float_type), trainable=True, transform=positive(1e-4))
         self.r = 1
-        self.max_action = max_action
 
     def compute_ratio(self, x):
         '''
@@ -317,10 +338,13 @@ class CombinedController(gpflow.Module, PyPolicy):
         ratio = 1 / tf.pow(d + 1, 2)
         return ratio
 
-    def _action(self, time_step: ts.TimeStep, policy_state: types.NestedArray) -> policy_step.PolicyStep:
+    def _distribution(self, time_step: ts.TimeStep, policy_state: types.NestedTensorSpec) -> policy_step.PolicyStep:
         obs = time_step.observation
-        M, S, V = self.compute_action(obs, tf.zeros((self.state_dim, self.state_dim), float_type), True)
-        return policy_step.PolicyStep(M, (), ())
+        M, _, _ = self.compute_action(obs, tf.zeros((self.state_dim, self.state_dim), float_type), True)
+
+        action_distribution = tf.nest.map_structure(to_distribution, M)
+        policy_state = ()  # Need to confirm policy state is not needed
+        return policy_step.PolicyStep(action_distribution, policy_state)
 
     def compute_action(self, m, s, squash=True):
         '''
