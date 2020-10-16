@@ -32,7 +32,7 @@ train_pilco.controller = @pythonrbfcontroller/singleton()
 train_pilco.target = [1.,0.,0.]
 train_pilco.weights = [2.,2.,0.3]
 train_pilco.m_init = [-1.,0.,0.]
-train_pilco.S_init = [0.01, 0.05, 0.01]
+train_pilco.S_init = [1.0, 1.0, 1.0]
 train_pilco.training_rollout_total_num = 1
 
 # DDPG exclusives
