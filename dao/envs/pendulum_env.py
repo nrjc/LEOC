@@ -1,8 +1,9 @@
 from typing import List
 from gym.envs.classic_control import PendulumEnv
+from gym import spaces
 import numpy as np
 
-float_type = np.float32
+float_type = np.float64
 
 
 class SwingUpEnv(PendulumEnv):
@@ -10,6 +11,18 @@ class SwingUpEnv(PendulumEnv):
         super().__init__()
         self.up = initialize_top
         self.name = name
+
+        high = np.array([1., 1., self.max_speed], dtype=float_type)
+        self.action_space = spaces.Box(
+            low=-self.max_torque,
+            high=self.max_torque, shape=(1,),
+            dtype=float_type
+        )
+        self.observation_space = spaces.Box(
+            low=-high,
+            high=high,
+            dtype=float_type
+        )
 
     def reset(self):
         if self.up:

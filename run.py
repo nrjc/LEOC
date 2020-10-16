@@ -1,6 +1,6 @@
 import numpy as np
 import gpflow
-gpflow.config.set_default_float(np.float32)
+gpflow.config.set_default_float(np.float64)
 
 from DDPG.ddpg import DDPG
 from DDPG.utils import train_ddpg

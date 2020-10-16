@@ -42,22 +42,22 @@ class Continuous_MountainCarEnv(gym.Env):
         self.tau = 0.02  # seconds between state updates
 
         self.low_state = np.array(
-            [self.position_min, -np.finfo(np.float32).max], dtype=np.float32
+            [self.position_min, -np.finfo(float_type).max], dtype=float_type
         )
         self.high_state = np.array(
-            [self.position_max, np.finfo(np.float32).max], dtype=np.float32
+            [self.position_max, np.finfo(float_type).max], dtype=float_type
         )
 
         self.action_space = spaces.Box(
             low=-self.force_max,
             high=self.force_max,
             shape=(1,),
-            dtype=np.float32
+            dtype=float_type
         )
         self.observation_space = spaces.Box(
             low=self.low_state,
             high=self.high_state,
-            dtype=np.float32
+            dtype=float_type
         )
 
         self.seed()
