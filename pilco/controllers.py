@@ -4,8 +4,7 @@ from typing import Tuple, List
 import gin
 import tensorflow as tf
 from scipy.special import owens_t
-from tensorflow import TensorSpec, tanh
-from tensorflow_probability import distributions as tfd, bijectors
+from tensorflow_probability import distributions as tfd
 import tensorflow_probability as tfp
 import numpy as np
 import gpflow
@@ -13,8 +12,6 @@ from gpflow import Parameter
 from gpflow import set_trainable
 from gpflow.utilities import positive
 from tf_agents.environments.tf_py_environment import TFPyEnvironment
-from tf_agents.policies.py_policy import PyPolicy
-from tf_agents.policies.py_tf_policy import PyTFPolicy
 from tf_agents.policies.tf_policy import TFPolicy
 from tf_agents.trajectories import time_step as ts, policy_step
 from tf_agents.typing import types
@@ -110,16 +107,16 @@ def to_distribution(action_or_distribution):
 class LinearController(gpflow.Module, TFPolicy):
     def __init__(self, env: TFPyEnvironment, W=None, b=None, trainable=False):
         gpflow.Module.__init__(self)
-        state_dim = env.observation_spec().shape[0]
-        control_dim = env.action_spec().shape[0]
+        self.state_dim = env.observation_spec().shape[0]
+        self.control_dim = env.action_spec().shape[0]
         self.max_action = float(env.action_spec().maximum.max())
         TFPolicy.__init__(self, time_step_spec=env.time_step_spec(), action_spec=env.action_spec())
 
         if W is None:
-            self.W = Parameter(np.random.rand(control_dim, state_dim), dtype=float_type, trainable=trainable)
+            self.W = Parameter(np.random.rand(self.control_dim, self.state_dim), dtype=float_type, trainable=trainable)
         else:
             self.W = Parameter(W, dtype=float_type, trainable=trainable)
-        self.b = Parameter(np.zeros((1, control_dim)), dtype=float_type, trainable=trainable)
+        self.b = Parameter(np.zeros((1, self.control_dim)), dtype=float_type, trainable=trainable)
 
     def compute_action(self, m, s, squash=True):
         '''
@@ -313,25 +310,25 @@ class HybridController(gpflow.Module, TFPolicy):
 
     def __init__(self, env: TFPyEnvironment, W=None, controller_location=None, num_basis_functions=60):
         gpflow.Module.__init__(self)
-        state_dim = env.observation_spec().shape[0]
-        control_dim = env.action_spec().shape[0]
+        self.state_dim = env.observation_spec().shape[0]
+        self.control_dim = env.action_spec().shape[0]
         self.max_action = float(env.action_spec().maximum.max())
         TFPolicy.__init__(self, time_step_spec=env.time_step_spec(), action_spec=env.action_spec())
 
         if controller_location is None:
-            controller_location = np.zeros((1, state_dim), float_type)
+            controller_location = np.zeros((1, self.state_dim), float_type)
         self.rbf_controller = RbfController(env, num_basis_functions)
         self.linear_controller = LinearController(env, W=W, trainable=False)
         self.a = Parameter(controller_location, trainable=False)
-        self.S = Parameter(5 * np.ones(state_dim, float_type), trainable=True, transform=positive(1e-4))
+        self.S = Parameter(5 * np.ones(self.state_dim, float_type), trainable=True, transform=positive(1e-4))
         self.r = 1
 
     def compute_ratio(self, x):
         '''
         Compute the ratio of the linear controller
         '''
-        S = self.S.read_value()
-        a = self.a.read_value()
+        S = self.S._value()
+        a = self.a._value()
         d = (x - a) @ tf.linalg.diag(S) @ tf.transpose(x - a)
         ratio = 1 / tf.pow(d + 1, 2)
         return ratio
