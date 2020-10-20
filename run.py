@@ -16,21 +16,25 @@ from dao.trainer import PILCOTrainer, DDPGTrainer
 
 gin.parse_config_file('config.gin')
 # %%
-ddpg_trainer = DDPGTrainer()
-# %%
-ddpg_trainer.train()
-#%%
-ddpg_trainer.save()
-#%%
-ddpg_trainer.load()
-#%%
-# pilco_trainer = PILCOTrainer()
+# ddpg_trainer = DDPGTrainer()
+# # %%
+# ddpg_trainer.train()
 # #%%
-# pilco_trainer.train()
+# ddpg_trainer.save()
 # #%%
-# pilco_trainer.save()
+# ddpg_trainer.load()
 # #%%
-# pilco_trainer.load()
-#
-# result = pilco_trainer.eval()
+# result = ddpg_trainer.eval()
 # print(result)
+#%%
+pilco_trainer = PILCOTrainer()
+#%%
+pilco_trainer.train()
+#%%
+pilco_trainer.save()
+#%%
+pilco_trainer.load()
+
+result = pilco_trainer.eval()
+result = [i.numpy()[0] for i in result]
+print(result)

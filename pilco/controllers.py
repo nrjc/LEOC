@@ -320,7 +320,7 @@ class HybridController(gpflow.Module, TFPolicy):
         self.rbf_controller = RbfController(env, num_basis_functions)
         self.linear_controller = LinearController(env, W=W, trainable=False)
         self.a = Parameter(controller_location, trainable=False)
-        self.S = Parameter(5 * np.ones(self.state_dim, float_type), trainable=True, transform=positive(1e-4))
+        self.S = Parameter(np.ones(self.state_dim, float_type), trainable=True, transform=positive(1e-4))
         self.r = 1
 
     def compute_ratio(self, x):

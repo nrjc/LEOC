@@ -10,32 +10,37 @@ pythonenv/singleton.constructor = @load_py_env
 load_tf_py_env.env = @pythonenv/singleton()
 pythontfenv/singleton.constructor = @load_tf_py_env
 
-# PILCO exclusives
-pythonlinearcontroller/singleton.constructor = @LinearController
-LinearController.W = @load_weight_matrix()
-LinearController.env = @pythontfenv/singleton()
 
-pythonrbfcontroller/singleton.constructor = @RbfController
-RbfController.env = @pythontfenv/singleton()
+# PILCO exclusives
+
+#pythonlinearcontroller/singleton.constructor = @LinearController
+#LinearController.W = @load_weight_matrix()
+#LinearController.env = @pythontfenv/singleton()
+
+#pythonrbfcontroller/singleton.constructor = @RbfController
+#RbfController.env = @pythontfenv/singleton()
 
 pythonhybridcontroller/singleton.constructor = @HybridController
 HybridController.W = @load_weight_matrix()
 HybridController.env = @pythontfenv/singleton()
 HybridController.controller_location = [1.,0.,0.]
 
-PILCOTrainer.saved_path = 'controllers/pendulum/pilco_rbf'
-PILCOTrainer.controller = @pythonrbfcontroller/singleton()
+PILCOTrainer.saved_path = 'controllers/pendulum/pilco_hybrid'
+PILCOTrainer.controller = @pythonhybridcontroller/singleton()
 PILCOTrainer.env = @pythontfenv/singleton()
 
 train_pilco.env = @pythonenv/singleton()
-train_pilco.controller = @pythonrbfcontroller/singleton()
+train_pilco.controller = @pythonhybridcontroller/singleton()
 train_pilco.target = [1.,0.,0.]
 train_pilco.weights = [2.,2.,0.3]
 train_pilco.m_init = [-1.,0.,0.]
-train_pilco.S_init = [1.0, 1.0, 1.0]
-train_pilco.training_rollout_total_num = 1
+train_pilco.S_init = [0.01, 0.05, 0.01]
+train_pilco.training_rollout_total_num = 10
+train_pilco.plot_func = @pilco_plotter
+
 
 # DDPG exclusives
+
 ddpgsingleton/singleton.constructor = @DDPG
 
 DDPG.train_env = @pythontfenv/singleton()

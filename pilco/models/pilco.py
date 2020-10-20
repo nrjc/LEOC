@@ -15,6 +15,7 @@ from gpflow import set_trainable
 
 logger = logging.getLogger(__name__)
 
+
 class PILCO(gpflow.models.BayesianModel):
     def __init__(self, data, num_induced_points=None, horizon=30, controller=None,
                  reward=None, m_init=None, S_init=None, name=None):
@@ -143,9 +144,11 @@ class PILCO(gpflow.models.BayesianModel):
         )
         return m_x, s_x, reward
 
-    def run_condition(self, cur_timestep, m_x, s_x, cur_reward, recording_list=None):
-        if recording_list is not None:
-            recording_list.append((m_x.numpy(), s_x.numpy(), cur_reward))
+    def run_condition(self, cur_timestep, m_x, s_x, cur_reward, m_array=None, s_array=None):
+        if m_array is not None and s_array is not None:
+            m_array.append(m_x.numpy()[0])
+            s_array.append(s_x.numpy().diagonal())
+
         return (cur_timestep + 1,
                 *self.propagate(m_x, s_x),
                 tf.add(cur_reward, self.reward.compute_reward(m_x, s_x)[0])
@@ -158,17 +161,17 @@ class PILCO(gpflow.models.BayesianModel):
             tf.convert_to_tensor(s_x),
             tf.constant([[0]], float_type),
         ]
-        storage_list = []
+        m_array = []
+        s_array = []
 
         _, m_x, s_x, reward = tf.while_loop(
             # Termination condition
             lambda j, m_x, s_x, reward: j < n,
             # Body function
-            lambda j, m_x, s_x, reward: self.run_condition(j, m_x, s_x, reward, storage_list),
+            lambda j, m_x, s_x, reward: self.run_condition(j, m_x, s_x, reward, m_array, s_array),
             loop_vars
         )
-        return m_x, s_x, reward, storage_list
-
+        return m_x, s_x, reward, np.array(m_array), np.array(s_array)
 
     def propagate(self, m_x, s_x):
         m_u, s_u, c_xu = self.controller.compute_action(m_x, s_x)
@@ -184,7 +187,7 @@ class PILCO(gpflow.models.BayesianModel):
         S_x = S_dx + s_x + s1 @ C_dx + tf.matmul(C_dx, s1, transpose_a=True, transpose_b=True)
 
         # While-loop requires the shapes of the outputs to be fixed
-        M_x.set_shape([1, self.state_dim]);
+        M_x.set_shape([1, self.state_dim])
         S_x.set_shape([self.state_dim, self.state_dim])
         return M_x, S_x
 
