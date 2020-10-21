@@ -6,10 +6,10 @@ import pandas as pd
 import csv
 from matplotlib import pyplot as plt
 from gym import logger
-
-from tf_agents.trajectories.trajectory import Trajectory
 import tensorflow as tf
+from tf_agents.trajectories.trajectory import Trajectory
 from dao.controller_utils import calculate_ratio
+
 plt.style.use('seaborn-darkgrid')
 
 
@@ -18,26 +18,40 @@ plt.style.use('seaborn-darkgrid')
 class EpochPlotter(object):
     def __init__(self, trajectories: List[Trajectory]):
         self.trajectories = trajectories
-        self.states = trajectories
-        self.rewards = trajectories
-        self.ratio = trajectories
-        self.timesteps = trajectories
-        self.early_termination_timesteps = len(self.states)
+        self.observations = [x.observation for x in trajectories]
+        self.rewards = [x.reward for x in trajectories]
+        self.actions = [x.action for x in trajectories]
+        self.ratio = [x.policy_info for x in trajectories]
+        # self.timesteps = len(self.observations)
+        self.timesteps = 100
         plt.style.use('seaborn-darkgrid')
 
-    def traj2theta(self, trajectories: Trajectory) -> np.ndarray:
+    def traj2theta(self, obs_idx: int = 0) -> np.ndarray:
+        """
+        Input:
+            trajectories: trajectories from eval
+            obs_idx: index of the observation corresponding to cosine
+        Output:
+            np.ndarray of states
+        """
+        observations = [i.numpy()[0] for i in self.observations]
+        observations = np.array(observations)
+        cos_theta = observations[:self.timesteps, obs_idx]
+        theta = tf.math.acos(cos_theta)
+        return theta
+
+    def traj2info(self) -> np.ndarray:
         """
         Input:
             trajectories: trajectories from eval
         Output:
-            np.ndarray of states
+            np.ndarray of info/controller ratios
         """
-        sin_theta, cos_theta = trajectories, trajectories
-        tan_theta = sin_theta / cos_theta
-        theta = tf.math.atan(tan_theta)
-        return theta
+        ratios = [i.numpy()[0] for i in self.ratio]
+        ratios = np.array(ratios[:self.timesteps])
+        return ratios
 
-    def traj2metrics(self, trajectories: Trajectory, target: List[float], stability_bound: float) \
+    def traj2metrics(self, target: List[float], stability_bound: float) \
             -> Tuple[float, int, int]:
         """
         Input:
@@ -45,7 +59,7 @@ class EpochPlotter(object):
         Output:
             np.ndarray of the control theory metrics
         """
-        traj = np.array(trajectories)
+        traj = np.array(self.trajectories)
         peak_overshot = max(traj) - target
         rising_time = traj.index(max(traj))
 
@@ -56,14 +70,40 @@ class EpochPlotter(object):
 
         return (peak_overshot, rising_time, settling_time)
 
-    def plot_theta(self, subplot, x, y, x_label, y_label):
+    def plot_state_cum_ratio(self):
+
+        thetas = self.traj2theta()
+        ratios = self.traj2info()
+
+        fig, ax1 = plt.subplots(figsize=(6, 4))
+
         # Plot theta
-        subplot.plot(x, y, color='darkorange', label=y_label)
-        subplot.set_xlabel(x_label)
-        subplot.legend()
-        subplot.set_title(f'\u03B8')
+        ln1 = ax1.plot(np.arange(self.timesteps), thetas, color='royalblue', label='\u03B8')
+        ax1.set_xlabel('Timesteps')
+        ax1.legend()
+        ax1.set_title(f'\u03B8 and Controller Ratio')
+
+        # Plot linear ratio
+        ax2 = ax1.twinx()
+        ln2 = ax2.plot(np.arange(self.timesteps), ratios, color='darkorange', label='Controller Ratio')
+
+        # Set legend and format
+        lns = ln1 + ln2
+        labs = [l.get_label() for l in lns]
+        ax1.legend(lns, labs)
+        ax2.grid(False)
+        fig.show()
 
     def plot_metrics(self):
+        pass
+
+
+# This class plots learning curves for the entire training session from a list of np.arrays
+class EntireTrainingPlotter(object):
+    def __init__(self, rewards: List[np.ndarray]):
+        self.rewards = rewards
+
+    def plot_rewards(self):
         pass
 
 
@@ -72,12 +112,11 @@ def pilco_plotter(predict_m, predict_s, realise, S, target):
     # Plot theta and linear ratio from PILCO
 
     # Plotting internal states of pilco variables
-    predict_cos_m, predict_sin_m = np.array([x[0] for x in predict_m]), np.array([x[1] for x in predict_m])
-    predict_cos_s, predict_sin_s = np.array([x[0] for x in predict_s]), np.array([x[1] for x in predict_s])
-    realise_cos, realise_sin = np.array([x[0] for x in realise]), np.array([x[1] for x in realise])
+    # predict_cos_m, predict_sin_m = np.array([x[0] for x in predict_m]), np.array([x[1] for x in predict_m])
+    # predict_cos_s, predict_sin_s = np.array([x[0] for x in predict_s]), np.array([x[1] for x in predict_s])
+    # predict_theta = trig2theta(predict_cos_m, predict_sin_m)
 
-    predict_theta = trig2theta(predict_cos_m, predict_sin_m)
-    realise_theta = trig2theta(realise_cos, realise_sin)
+    realise_cos, realise_sin = np.array([x[0] for x in realise]), np.array([x[1] for x in realise])
     realise_theta = tf.math.acos(realise_cos)
 
     timesteps = len(realise)
@@ -85,7 +124,7 @@ def pilco_plotter(predict_m, predict_s, realise, S, target):
     state_dim = len(target)
     ratio = np.array([calculate_ratio(x[:state_dim], target, S) for x in realise])
 
-    fig, ax1 = plt.subplots(figsize=(6, 4)) #plt.subplots(1, 1, figsize=(4, 3), constrained_layout=True)
+    fig, ax1 = plt.subplots(figsize=(6, 4))
 
     # Plot theta
     ln1 = ax1.plot(np.arange(timesteps), realise_theta, color='royalblue', label='\u03B8')
@@ -102,27 +141,6 @@ def pilco_plotter(predict_m, predict_s, realise, S, target):
     ax1.legend(lns, labs)
     ax2.grid(False)
     fig.show()
-
-# This class plots learning curves for the entire training session from a list of np.arrays
-class EntireTrainingPlotter(object):
-    def __init__(self, rewards: List[np.ndarray]):
-        self.rewards = rewards
-
-    def plot_rewards(self):
-        pass
-
-
-def trig2theta(cos_theta, sin_theta) -> np.ndarray:
-    """
-    Input:
-        cos_theta: np.ndarray
-        sin_theta: np.ndarray
-    Output:
-        np.ndarray of states
-    """
-    tan_theta = sin_theta / cos_theta
-    theta = tf.math.atan(tan_theta)
-    return theta
 
 
 def plot_single_rollout_cycle(state_mean: List[np.ndarray], state_var: List[np.ndarray],

@@ -1,6 +1,9 @@
 # Set metas for the entire experiment/run
 import numpy as np
 import gpflow
+
+from dao.plotter import EpochPlotter
+
 gpflow.config.set_default_float(np.float64)
 
 import tensorflow as tf
@@ -29,12 +32,15 @@ gin.parse_config_file('config.gin')
 #%%
 pilco_trainer = PILCOTrainer()
 #%%
-pilco_trainer.train()
-#%%
-pilco_trainer.save()
+# pilco_trainer.train()
+# #%%
+# pilco_trainer.save()
 #%%
 pilco_trainer.load()
 
-result = pilco_trainer.eval()
-result = [i.numpy()[0] for i in result]
-print(result)
+# pilco_trainer.visualise()
+
+trajectories = pilco_trainer.eval()
+
+myEpochPlotter = EpochPlotter(trajectories)
+myEpochPlotter.plot_state_cum_ratio()
