@@ -17,7 +17,7 @@ import gym
 from gym import spaces, logger
 from gym.utils import seeding
 
-float_type = np.float32
+float_type = np.float64
 
 
 class Continuous_MountainCarEnv(gym.Env):
