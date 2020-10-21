@@ -27,7 +27,7 @@ gin.parse_config_file('config.gin')
 # result = ddpg_trainer.eval()
 # print(result)
 #%%
-pilco_trainer = PILCOTrainer()
+pilco_trainer = DDPGTrainer()
 #%%
 pilco_trainer.train()
 #%%

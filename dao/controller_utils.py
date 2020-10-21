@@ -1,9 +1,11 @@
 import numpy as np
 import control
 from gym import logger
+from tf_agents.environments.py_environment import PyEnvironment
+
 
 class LQR:
-    def get_W_matrix(self, A, B, Q, env='swingup'):
+    def get_W_matrix(self, A, B, Q, env: PyEnvironment):
         # Compute gain matrix by solving Algebraic Riccati Equation
         # Reference https://www.mathworks.com/help/control/ref/lqr.html
         R = 1
@@ -11,22 +13,21 @@ class LQR:
         K = self.get_k_prime(K, env)
         return np.array(K)
 
-    def get_k_prime(self, K, env):
+    def get_k_prime(self, K, env: PyEnvironment):
         # Convert K to ndarray
         K = K.A
-
         # The internal states of gym envs are different from the internal states of theory, need to reorder the gains
-        if env == 'swingup':
+        if env.unwrapped.spec.id == 'Pendulum-v7':
             # K := [theta, thetadot]
             # 'Pendulum-v0' gym env states = [cos(theta), sin(theta), thetadot]
             K_prime = [[0, K[0][0], K[0][1]]]
 
-        elif env == 'cartpole':
+        elif env.unwrapped.spec.id == 'Cartpole-v7':
             # K := [x, x_dot, theta, theta_dot]
             # Cartpole env states = [x, x_dot, np.cos(theta), np.sin(theta), theta_dot]
             K_prime = [[K[0][0], K[0][1], 0, K[0][2], K[0][3]]]
 
-        elif env == 'mountaincar':
+        elif env.unwrapped.spec.id == 'Mountaincar-v7':
             # K := [position, velocity]
             # Mountain car gym env states = [position, velocity]
             K_prime = K
