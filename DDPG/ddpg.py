@@ -41,17 +41,16 @@ FLAGS = flags.FLAGS
 
 @gin.configurable
 class LinearControllerLayer(tf.Module):
-    def __init__(self, env: TFPyEnvironment, W=None, b=None, trainable=False):
+    def __init__(self, env: TFPyEnvironment, W=None, trainable=False):
         super(LinearControllerLayer, self).__init__()
         state_dim = env.observation_spec().shape[0]
         control_dim = env.action_spec().shape[0]
         if W is None:
-            self.w = tf.Variable(tf.random.normal([control_dim, state_dim]), dtype=float_type, trainable=True,
+            self.W = tf.Variable(tf.random.normal([control_dim, state_dim]), dtype=float_type, trainable=True,
                                  name='W')
-            self.b = tf.Variable(tf.zeros([control_dim]), dtype=float_type, trainable=False, name='b')
         else:
             self.W = tf.Variable(W, dtype=float_type, trainable=False, name='W')
-            self.b = tf.Variable(tf.zeros([control_dim]), dtype=float_type, trainable=False, name='b')
+        self.b = tf.Variable(tf.zeros([control_dim], dtype=float_type), dtype=float_type, trainable=False, name='b')
 
     @tf.function
     def __call__(self, x):
@@ -97,7 +96,7 @@ class MyActorNetwork(actor_network.ActorNetwork):
         self.a = tf.Variable(initial_value=controller_location, dtype=float_type, trainable=False)
         # self.S = tf.Variable(tf.ones(shape=input_tensor_spec.shape, dtype=float_type),
         #                      constraint=lambda x: tf.clip_by_value(x, 0, np.infty), trainable=True)
-        self.S = tf.Variable(S, trainable=True)
+        self.S = tf.Variable(S, dtype=float_type, trainable=True)
         self.r = 1
         # self.ratio = tf.Variable(tf.zeros(shape=self.S.shape, dtype=float_type), name='ratio')
 
@@ -126,12 +125,13 @@ class MyActorNetwork(actor_network.ActorNetwork):
             g_actions = self.linear_controller(observations)  # calculate linear action
         else:
             g_actions = 0.0
-
+        g_actions = tf.cast(g_actions, tf.float32)
         observations = tf.nest.flatten(observations)
-        output = tf.cast(observations[0], tf.float32)
+        output = tf.cast(observations[0], float_type)
         for layer in self._mlp_layers:
             output = layer(output, training=training)
-        h_actions = output  # non-linear action
+        h_actions =  output # non-linear action
+        r = tf.cast(r, tf.float32)
         actions = r * g_actions + (1 - r) * h_actions  # combined action
 
         actions = common.scale_to_spec(actions, self._single_action_spec)  # squash actions into action_spec bounds

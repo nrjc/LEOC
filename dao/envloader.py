@@ -17,7 +17,7 @@ def load_weight_matrix(env: PyEnvironment):
     W_matrix = None
     try:
         A, B, C, Q = env.control()
-        W_matrix = LQR().get_W_matrix(A, B, Q, env='swingup')
+        W_matrix = LQR().get_W_matrix(A, B, Q, env)
     except Exception:
         pass
     return W_matrix

@@ -12,7 +12,7 @@ from gym import spaces, logger
 from gym.utils import seeding
 import numpy as np
 
-float_type = np.float32
+float_type = np.float64
 
 
 class CartPoleEnv(gym.Env):
