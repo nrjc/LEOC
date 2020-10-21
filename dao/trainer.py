@@ -12,7 +12,7 @@ from tf_agents.trajectories.trajectory import Trajectory
 from DDPG.ddpg import DDPG
 from DDPG.utils import train_ddpg
 from pilco.utils import train_pilco
-from dao.metrics import CompleteStateObservation
+from dao.metrics import CompleteStateObservation, CompleteActionInfoObservation, CompleteTrajectoryObservation
 import tensorflow as tf
 
 
@@ -29,11 +29,13 @@ class Trainer:
     def eval(self) -> List[Trajectory]:
         num_episodes = tf_metrics.NumberOfEpisodes()
         env_steps = tf_metrics.EnvironmentSteps()
-        state_obs = CompleteStateObservation()
-        observers = [num_episodes, env_steps, state_obs]
+        # state_obs = CompleteStateObservation()
+        # action_obs = CompleteActionInfoObservation()
+        trajectories = CompleteTrajectoryObservation()
+        observers = [num_episodes, env_steps, trajectories]
         driver = dynamic_episode_driver.DynamicEpisodeDriver(self.env, self.policy, observers, num_episodes=2)
         final_time_step, _ = driver.run(policy_state=())
-        return state_obs.result()
+        return trajectories.result()
 
     def save(self):
         self.saver.save(self.saved_path)
@@ -41,15 +43,17 @@ class Trainer:
     def load(self):
         self.policy = tf.compat.v2.saved_model.load(self.saved_path)
 
-    def visualise(self, steps=200):
+    def visualise(self, steps=100):
         # To visualise and check on policy
+        # self.env.pyenv.envs[0]._env.gym.up = True
         time_step = self.env.reset()
         for step in range(steps):
             self.env.render()
             if time_step.is_last():
                 break
             action_step = self.policy.action(time_step)
-            time_step = self.env.step(action_step.action)
+            action, ratio = action_step.action, action_step.info
+            time_step = self.env.step(action)
         self.env.close()
 
 

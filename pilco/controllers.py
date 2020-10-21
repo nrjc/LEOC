@@ -13,6 +13,7 @@ from gpflow import set_trainable
 from gpflow.utilities import positive
 from tf_agents.environments.tf_py_environment import TFPyEnvironment
 from tf_agents.policies.tf_policy import TFPolicy
+from tf_agents.specs import BoundedArraySpec
 from tf_agents.trajectories import time_step as ts, policy_step
 from tf_agents.typing import types
 
@@ -110,7 +111,8 @@ class LinearController(gpflow.Module, TFPolicy):
         self.state_dim = env.observation_spec().shape[0]
         self.control_dim = env.action_spec().shape[0]
         self.max_action = float(env.action_spec().maximum.max())
-        TFPolicy.__init__(self, time_step_spec=env.time_step_spec(), action_spec=env.action_spec())
+        info_spec = BoundedArraySpec((1,), float_type, minimum=0.0, maximum=1.0)
+        TFPolicy.__init__(self, time_step_spec=env.time_step_spec(), action_spec=env.action_spec(), info_spec=info_spec)
 
         if W is None:
             self.W = Parameter(np.random.rand(self.control_dim, self.state_dim), dtype=float_type, trainable=trainable)
@@ -138,7 +140,8 @@ class LinearController(gpflow.Module, TFPolicy):
 
         action_distribution = tf.nest.map_structure(to_distribution, M)
         policy_state = ()  # Need to confirm policy state is not needed
-        return policy_step.PolicyStep(action_distribution, policy_state)
+        ratio = 1.0
+        return policy_step.PolicyStep(action_distribution, policy_state, ratio)
 
     def randomize(self):
         mean = 0
@@ -174,10 +177,11 @@ class RbfController(MGPR, TFPolicy):
         self.state_dim = env.observation_spec().shape[0]
         self.control_dim = env.action_spec().shape[0]
         self.max_action = float(env.action_spec().maximum.max())
-        TFPolicy.__init__(self, time_step_spec=env.time_step_spec(), action_spec=env.action_spec())
         MGPR.__init__(self,
                       [np.random.randn(num_basis_functions, self.state_dim),
                        0.1 * np.random.randn(num_basis_functions, self.control_dim)])
+        info_spec = BoundedArraySpec((1,), float_type, minimum=0.0, maximum=1.0)
+        TFPolicy.__init__(self, time_step_spec=env.time_step_spec(), action_spec=env.action_spec(), info_spec=info_spec)
         for model in self.models:
             model.kernel.variance.assign(1.0)
             set_trainable(model.kernel.variance, False)
@@ -216,7 +220,8 @@ class RbfController(MGPR, TFPolicy):
 
         action_distribution = tf.nest.map_structure(to_distribution, M)
         policy_state = ()  # Need to confirm policy state is not needed
-        return policy_step.PolicyStep(action_distribution, policy_state)
+        ratio = 0.0
+        return policy_step.PolicyStep(action_distribution, policy_state, ratio)
 
     def randomize(self):
         print("Randomising controller")
@@ -313,7 +318,8 @@ class HybridController(gpflow.Module, TFPolicy):
         self.state_dim = env.observation_spec().shape[0]
         self.control_dim = env.action_spec().shape[0]
         self.max_action = float(env.action_spec().maximum.max())
-        TFPolicy.__init__(self, time_step_spec=env.time_step_spec(), action_spec=env.action_spec())
+        info_spec = BoundedArraySpec((1,), float_type, minimum=0.0, maximum=1.0)
+        TFPolicy.__init__(self, time_step_spec=env.time_step_spec(), action_spec=env.action_spec(), info_spec=info_spec)
 
         if controller_location is None:
             controller_location = np.zeros((1, self.state_dim), float_type)
@@ -333,14 +339,6 @@ class HybridController(gpflow.Module, TFPolicy):
         ratio = 1 / tf.pow(d + 1, 2)
         return ratio
 
-    def _distribution(self, time_step: ts.TimeStep, policy_state: types.NestedTensorSpec) -> policy_step.PolicyStep:
-        obs = time_step.observation
-        M, _, _ = self.compute_action(obs, tf.zeros((self.state_dim, self.state_dim), float_type), True)
-
-        action_distribution = tf.nest.map_structure(to_distribution, M)
-        policy_state = ()  # Need to confirm policy state is not needed
-        return policy_step.PolicyStep(action_distribution, policy_state)
-
     def compute_action(self, m, s, squash=True):
         '''
         RBF Controller. See Deisenroth's Thesis Section
@@ -358,6 +356,15 @@ class HybridController(gpflow.Module, TFPolicy):
             M, S, V2 = squash_sin(M, S, self.max_action)
             V = V @ V2
         return M, S, V
+
+    def _distribution(self, time_step: ts.TimeStep, policy_state: types.NestedTensorSpec) -> policy_step.PolicyStep:
+        obs = time_step.observation
+        M, _, _ = self.compute_action(obs, tf.zeros((self.state_dim, self.state_dim), float_type), True)
+
+        action_distribution = tf.nest.map_structure(to_distribution, M)
+        policy_state = ()  # Need to confirm policy state is not needed
+        ratio = self.r
+        return policy_step.PolicyStep(action_distribution, policy_state, ratio)
 
     def randomize(self):
         self.rbf_controller.randomize()
