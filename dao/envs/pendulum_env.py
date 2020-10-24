@@ -10,6 +10,7 @@ class SwingUpEnv(PendulumEnv):
     def __init__(self, initialize_top=False, name=None):
         super().__init__()
         self.up = initialize_top
+        self.target = np.array([1.0, 0.0, 0.0])
         self.name = name
 
         high = np.array([1., 1., self.max_speed], dtype=float_type)

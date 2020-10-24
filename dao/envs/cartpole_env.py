@@ -101,6 +101,7 @@ class CartPoleEnv(gym.Env):
         self.state = None
         self.steps_beyond_done = None
         self.weights = np.diag([2.0, 0.3, 2.0, 0.3])
+        self.target = np.array([0.0, 0.0, 1.0, 0.0, 0.0])
 
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)
@@ -143,33 +144,6 @@ class CartPoleEnv(gym.Env):
         reward = - 0.1 * (5 * (angle_normalize(theta) ** 2) + (x ** 2) + .005 * (force ** 2))
         if done:
             reward -= 100
-
-        # reward_theta = (np.cos(theta) + 1.0) / 2.0
-        # reward_x = np.cos((x / self.x_threshold) * (np.pi / 2.0))
-        # reward = reward_theta * reward_x
-
-        # reward = - (.5 * (x ** 2) +
-        #             .1 * (x_dot ** 2) +
-        #             angle_normalize(theta) ** 2 +
-        #             .1 * (theta_dot ** 2) +
-        #             .001 * (force ** 2))
-
-        # if not done:
-        #     reward = 1.0
-        # elif self.steps_beyond_done is None:
-        #     # Pole just fell!
-        #     self.steps_beyond_done = 0
-        #     reward = 1.0
-        # else:
-        #     if self.steps_beyond_done == 0:
-        #         logger.warn(
-        #             "You are calling 'step()' even though this "
-        #             "environment has already returned done = True. You "
-        #             "should always call 'reset()' once you receive 'done = "
-        #             "True' -- any further steps are undefined behavior."
-        #         )
-        #     self.steps_beyond_done += 1
-        #     reward = 0.0
 
         return self._get_obs(), reward, done, {}
 
