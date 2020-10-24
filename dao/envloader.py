@@ -29,3 +29,7 @@ def load_tf_py_env(env: PyEnvironment) -> TFPyEnvironment:
 
 def load_controller():
     pass
+
+
+def TFPy2Gym(env: TFPyEnvironment) -> TFPyEnvironment:
+    return env.pyenv.envs[0]._env.gym  # Dirty hacks all around
