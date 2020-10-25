@@ -4,6 +4,9 @@ import tensorflow as tf
 import tensorflow_probability as tfp
 from gym import logger
 from tf_agents.environments.py_environment import PyEnvironment
+from gpflow import config
+
+float_type = config.default_float()
 
 
 class LQR:
@@ -50,3 +53,32 @@ def to_distribution(action_or_distribution):
         # This is an action tensor, so wrap it in a deterministic distribution.
         return tfp.distributions.Deterministic(loc=action_or_distribution)
     return action_or_distribution
+
+
+def spec_means_and_magnitudes(action_spec):
+    """Get the center and magnitude of the ranges in action spec."""
+    action_means = tf.nest.map_structure(
+        lambda spec: (spec.maximum + spec.minimum) / 2.0, action_spec)
+    action_magnitudes = tf.nest.map_structure(
+        lambda spec: (spec.maximum - spec.minimum) / 2.0, action_spec)
+    return action_means, action_magnitudes
+
+
+def scale_to_spec(tensor, spec):
+    """Shapes and scales a batch into the given spec bounds.
+
+    Args:
+      tensor: A [batch x n] tensor with values in the range of [-1, 1].
+      spec: (BoundedTensorSpec) to use for scaling the action.
+
+    Returns:
+      A batch scaled the given spec bounds.
+    """
+    tensor = tf.reshape(tensor, [-1] + spec.shape.as_list())
+
+    # Scale the tensor.
+    means, magnitudes = spec_means_and_magnitudes(spec)
+    tensor = means + magnitudes * tensor
+
+    # Set type.
+    return tf.cast(tensor, spec.dtype)
