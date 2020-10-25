@@ -1,11 +1,9 @@
-import math
 from typing import Tuple, List
 
 import gin
 import tensorflow as tf
 from scipy.special import owens_t
 from tensorflow_probability import distributions as tfd
-import tensorflow_probability as tfp
 import numpy as np
 import gpflow
 from gpflow import Parameter
@@ -17,6 +15,8 @@ from tf_agents.specs import BoundedArraySpec
 from tf_agents.trajectories import time_step as ts, policy_step
 from tf_agents.typing import types
 
+from dao.controller_utils import to_distribution
+from dao.envloader import TFPy2Gym
 from .models import MGPR
 
 float_type = gpflow.config.default_float()
@@ -97,13 +97,6 @@ def squash_cum_normal(m, s, max_action=None):
     return M, S, C
 
 
-def to_distribution(action_or_distribution):
-    if isinstance(action_or_distribution, tf.Tensor):
-        # This is an action tensor, so wrap it in a deterministic distribution.
-        return tfp.distributions.Deterministic(loc=action_or_distribution)
-    return action_or_distribution
-
-
 @gin.configurable
 class LinearController(gpflow.Module, TFPolicy):
     def __init__(self, env: TFPyEnvironment, W=None, b=None, trainable=False):
@@ -111,6 +104,7 @@ class LinearController(gpflow.Module, TFPolicy):
         self.state_dim = env.observation_spec().shape[0]
         self.control_dim = env.action_spec().shape[0]
         self.max_action = float(env.action_spec().maximum.max())
+        self.r = 1.0
         info_spec = BoundedArraySpec((1,), float_type, minimum=0.0, maximum=1.0)
         TFPolicy.__init__(self, time_step_spec=env.time_step_spec(), action_spec=env.action_spec(), info_spec=info_spec)
 
@@ -140,7 +134,7 @@ class LinearController(gpflow.Module, TFPolicy):
 
         action_distribution = tf.nest.map_structure(to_distribution, M)
         policy_state = ()  # Need to confirm policy state is not needed
-        ratio = 1.0
+        ratio = self.r
         return policy_step.PolicyStep(action_distribution, policy_state, ratio)
 
     def randomize(self):
@@ -177,6 +171,7 @@ class RbfController(MGPR, TFPolicy):
         self.state_dim = env.observation_spec().shape[0]
         self.control_dim = env.action_spec().shape[0]
         self.max_action = float(env.action_spec().maximum.max())
+        self.r = 0.0
         MGPR.__init__(self,
                       [np.random.randn(num_basis_functions, self.state_dim),
                        0.1 * np.random.randn(num_basis_functions, self.control_dim)])
@@ -220,7 +215,7 @@ class RbfController(MGPR, TFPolicy):
 
         action_distribution = tf.nest.map_structure(to_distribution, M)
         policy_state = ()  # Need to confirm policy state is not needed
-        ratio = 0.0
+        ratio = self.r
         return policy_step.PolicyStep(action_distribution, policy_state, ratio)
 
     def randomize(self):
@@ -313,7 +308,7 @@ class HybridController(gpflow.Module, TFPolicy):
     Section 5.3.2.
     '''
 
-    def __init__(self, env: TFPyEnvironment, W=None, controller_location=None, num_basis_functions=60):
+    def __init__(self, env: TFPyEnvironment, W=None, num_basis_functions=60):
         gpflow.Module.__init__(self)
         self.state_dim = env.observation_spec().shape[0]
         self.control_dim = env.action_spec().shape[0]
@@ -321,13 +316,13 @@ class HybridController(gpflow.Module, TFPolicy):
         info_spec = BoundedArraySpec((1,), float_type, minimum=0.0, maximum=1.0)
         TFPolicy.__init__(self, time_step_spec=env.time_step_spec(), action_spec=env.action_spec(), info_spec=info_spec)
 
-        if controller_location is None:
-            controller_location = np.zeros((1, self.state_dim), float_type)
         self.rbf_controller = RbfController(env, num_basis_functions)
         self.linear_controller = LinearController(env, W=W, trainable=False)
+
+        controller_location = TFPy2Gym(env).target
         self.a = Parameter(controller_location, trainable=False)
         self.S = Parameter(np.ones(self.state_dim, float_type), trainable=True, transform=positive(1e-4))
-        self.r = 1
+        self.r = 1.0
 
     def compute_ratio(self, x):
         '''

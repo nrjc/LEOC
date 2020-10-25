@@ -2,8 +2,6 @@
 import numpy as np
 import gpflow
 
-from dao.plotter import EpochPlotter
-
 gpflow.config.set_default_float(np.float64)
 
 import tensorflow as tf
@@ -19,28 +17,11 @@ from dao.trainer import PILCOTrainer, DDPGTrainer
 
 gin.parse_config_file('config.gin')
 # %%
-# ddpg_trainer = DDPGTrainer()
-# # %%
-# ddpg_trainer.train()
+ddpg_trainer = DDPGTrainer()
+# %%
+ddpg_trainer.train()
 # #%%
-# ddpg_trainer.save()
+# pilco_trainer = PILCOTrainer()
 # #%%
-# ddpg_trainer.load()
-# #%%
-# result = ddpg_trainer.eval()
-# print(result)
-#%%
-pilco_trainer = DDPGTrainer()
-#%%
 # pilco_trainer.train()
-# #%%
-# pilco_trainer.save()
 #%%
-pilco_trainer.load()
-
-# pilco_trainer.visualise()
-
-trajectories = pilco_trainer.eval()
-
-myEpochPlotter = EpochPlotter(trajectories)
-myEpochPlotter.plot_state_cum_ratio()

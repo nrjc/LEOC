@@ -1,72 +1,9 @@
-from typing import Union
-
-from gpflow import config, set_trainable
+from gpflow import config
 from gym import make
 import pickle
-
-from tf_agents.environments.py_environment import PyEnvironment
-from tf_agents.policies.py_policy import PyPolicy
-
-from pilco.models import PILCO
-from pilco.rewards import ExponentialReward
-from dao.plotter import *
+import numpy as np
 
 float_type = config.default_float()
-
-
-@gin.configurable
-def train_pilco(env: PyEnvironment, controller: Union[PyPolicy, tf.Module], target: List[float],
-                weights: List[float], m_init: List[float], S_init: List[float], training_rollout_total_num: int = 10,
-                initial_num_rollout: int = 3, timesteps: int = 40, subs: int = 3, max_iter_policy_train: int = 50,
-                max_training_restarts: int = 2, max_policy_restarts: int = 2, plot_func=None) \
-        -> tf.Module:
-    target = np.array(target, dtype=float_type)
-    weights = np.array(np.diag(weights), dtype=float_type)
-    m_init = np.array(np.reshape(m_init, (1, -1)), dtype=float_type)
-    S_init = np.array(np.diag(S_init), dtype=float_type)
-
-    R = ExponentialReward(state_dim=env.observation_spec().shape[0], t=target, W=weights)
-    env = env._env.gym  # Dirty hacks all around
-    # Initial random rollouts to generate a dataset
-    X, Y, _, _ = rollout(env=env, pilco=None, timesteps=timesteps, random=True, SUBS=subs, render=False, verbose=False)
-    for i in range(1, initial_num_rollout):
-        X_, Y_, _, _ = rollout(env=env, pilco=None, timesteps=timesteps, random=True, SUBS=subs, render=False,
-                               verbose=False)
-        X = np.vstack((X, X_))
-        Y = np.vstack((Y, Y_))
-    pilco = PILCO((X, Y), controller=controller, horizon=timesteps, reward=R, m_init=m_init, S_init=S_init)
-
-    # for numerical stability, we can set the likelihood variance parameters of the GP models
-    for model in pilco.mgpr.models:
-        model.likelihood.variance.assign(0.001)
-        set_trainable(model.likelihood.variance, False)
-
-    for rollouts in range(training_rollout_total_num):
-        print(f'**** ITERATION no. {rollouts} ****')
-        policy_restarts = 1 if rollouts > 3 else max_policy_restarts
-        pilco.optimize_models(maxiter=max_iter_policy_train, restarts=max_training_restarts)
-        pilco.optimize_policy(maxiter=max_iter_policy_train, restarts=policy_restarts)
-        X_new, Y_new, _, _ = rollout(env, pilco, timesteps=timesteps, verbose=False, SUBS=subs)
-
-        # Since we had decide on the various parameters of the reward function
-        # we might want to verify that it behaves as expected by inspection
-
-        _, _, reward, m_intermediate, s_intermediate = pilco.predict_and_obtain_intermediates(X_new[0, None, :-1],
-                                                                                              0.001 * S_init,
-                                                                                              timesteps)
-
-        # Update dataset
-        X = np.vstack((X, X_new))
-        Y = np.vstack((Y, Y_new))
-        pilco.mgpr.set_data((X, Y))
-
-        # Plot using the plot_func
-        if plot_func is not None:
-            rollout_S = pilco.get_controller().S._value().numpy()
-            print(f'rollout_S = {rollout_S}')
-            plot_func(m_intermediate, s_intermediate, X_new, rollout_S, target)
-
-    return controller
 
 
 def rollout(env, pilco, timesteps, verbose=True, random=False, SUBS=1, render=False):
