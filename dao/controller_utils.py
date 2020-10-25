@@ -1,5 +1,7 @@
 import numpy as np
 import control
+import tensorflow as tf
+import tensorflow_probability as tfp
 from gym import logger
 from tf_agents.environments.py_environment import PyEnvironment
 
@@ -41,3 +43,10 @@ def calculate_ratio(x, a, S):
     d = (x - a) @ np.diag(S) @ (x - a).transpose()
     ratio = 1 / np.power(d + 1, 2)
     return ratio
+
+
+def to_distribution(action_or_distribution):
+    if isinstance(action_or_distribution, tf.Tensor):
+        # This is an action tensor, so wrap it in a deterministic distribution.
+        return tfp.distributions.Deterministic(loc=action_or_distribution)
+    return action_or_distribution
