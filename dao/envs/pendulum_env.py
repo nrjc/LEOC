@@ -7,9 +7,9 @@ float_type = np.float64
 
 
 class SwingUpEnv(PendulumEnv):
-    def __init__(self, initialize_top=False, name=None):
+    def __init__(self, top=False, name=None):
         super().__init__()
-        self.up = initialize_top
+        self.up = top
         self.target = np.array([1.0, 0.0, 0.0])
         self.name = name
 

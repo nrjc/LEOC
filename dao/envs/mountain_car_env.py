@@ -26,7 +26,7 @@ class Continuous_MountainCarEnv(gym.Env):
         'video.frames_per_second': 50
     }
 
-    def __init__(self):
+    def __init__(self, top=False):
         self.position_min = -2 * np.pi
         self.position_max = 1.5 * np.pi
         self.x_offset = 0.0
@@ -35,7 +35,7 @@ class Continuous_MountainCarEnv(gym.Env):
         self.y_scale = 1.0
         self.starting_position = (-np.pi - self.x_offset) / self.x_scale
         self.goal_position = (0.0 - self.x_offset) / self.x_scale
-
+        self.top = top
         self.gravity = 9.8
         self.masscart = 0.1
         self.force_max = 3.0
@@ -98,9 +98,14 @@ class Continuous_MountainCarEnv(gym.Env):
         return self._get_obs(), reward, done, {}
 
     def reset(self):
-        self.state = np.array([self.starting_position, 0])
-        high = np.array([np.pi * (30 / 180) / self.x_scale, 0.1])
-        noise = self.np_random.uniform(low=-high, high=high)
+        if self.top:
+            self.state = np.array([0., 0.])
+            high = np.array([np.pi * (2 / 180) / self.x_scale, 0.1])
+            noise = self.np_random.uniform(low=-high, high=high)
+        else:
+            self.state = np.array([self.starting_position, 0])
+            high = np.array([np.pi * (30 / 180) / self.x_scale, 0.1])
+            noise = self.np_random.uniform(low=-high, high=high)
         self.state = self.state + noise
         self.steps_beyond_done = None
         return self._get_obs()
