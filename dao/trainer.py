@@ -1,4 +1,5 @@
-import copy
+import os
+import pickle
 import gin
 import numpy as np
 import tensorflow as tf
@@ -37,16 +38,15 @@ class Visualiser:
     """
     To visualise and check on policy
     """
-    def __init__(self, env: TFPyEnvironment, policy: TFPolicy, saved_path: str = None):
+    def __init__(self, env: TFPyEnvironment, policy: TFPolicy, model_path: str = None):
         self.env = env
         self.policy = policy
-        self.saved_path = saved_path
+        self.model_path = model_path
 
     def load(self):
-        self.policy = tf.compat.v2.saved_model.load(self.saved_path)
+        self.policy = tf.compat.v2.saved_model.load(self.model_path)
 
     def __call__(self, steps=100):
-        # self.env.pyenv.envs[0]._env.gym.up = True
         time_step = self.env.reset()
         for step in range(steps):
             self.env.render()
@@ -61,25 +61,55 @@ class Visualiser:
 @gin.configurable
 class Evaluator:
     def __init__(self, env: TFPyEnvironment, policy: TFPolicy, plotter: Plotter = None,
-                 saved_path: str = None, eval_num_episodes: int = 1):
+                 model_path: str = None, eval_num_episodes: int = 1):
         self.env = env
         self.policy = policy
-        self.saved_path = saved_path
+        self.model_path = model_path
         self.best_reward = -np.finfo(float_type).max
         self.saver = policy_saver.PolicySaver(self.policy, batch_size=None)
         self.eval_num_episodes = eval_num_episodes
         self.plotter = plotter
+        self.pickle_path = 'results.pickle'
+        self.eval_results = []
+        self.eval_times = []
+        self.tau = TFPy2Gym(self.env).tau
 
-    def load(self):
-        self.policy = tf.compat.v2.saved_model.load(self.saved_path)
+    def load_policy(self):
+        self.policy = tf.compat.v2.saved_model.load(self.model_path)
 
-    def save(self):
-        self.saver.save(self.saved_path)
+    def save_policy(self):
+        self.saver.save(self.model_path)
 
-    def __call__(self, save_model: bool = False) -> List[Trajectory]:
+    def update_pickle(self):
+        # load pickle into memory
+        if os.path.isfile(self.pickle_path) and os.access(self.pickle_path, os.R_OK):
+            # checks if file exists
+            with open(self.pickle_path, 'rb') as f:
+                eval_results_db = pickle.load(f)
+        else:
+            eval_results_db = {}
+
+        # update the pickled db object with new eval_results
+        xy = (self.eval_times, self.eval_results)
+        if self.model_path in eval_results_db:
+            eval_results_db[self.model_path].append(xy)
+        else:
+            eval_results_db[self.model_path] = [xy]
+
+        # save pickle file
+        with open(self.pickle_path, 'wb') as f:
+            pickle.dump(eval_results_db, f)
+
+        print(f'Pickle file updated with {self.model_path} data')
+
+    def __call__(self, training_timesteps: int, save_model: bool = False) -> List[Trajectory]:
         """
-        Evaluate the trained policy, possibly saving model and plotting.
-        Invoked after each eval_
+        Invoked after each eval_interval during training phase.
+        Each __call__ does 4 things:
+            - Evaluate the trained policy.
+            - Possibly saving model if returns are the best so far.
+            - Does any plotting.
+            - Keep the eval_reward for learning curve plotting.
         """
         num_episodes = tf_metrics.NumberOfEpisodes()
         env_steps = tf_metrics.EnvironmentSteps()
@@ -94,13 +124,20 @@ class Evaluator:
         final_time_step, _ = driver.run(policy_state=())
 
         eval_reward = avg_reward.result()
-        print(f'eval_reward from AverageReturnMetric = {eval_reward}')
+        print(f'Eval_reward = {eval_reward}')
+
+        # save model
         if save_model and eval_reward > self.best_reward:
             self.best_reward = eval_reward
-            self.save()
+            self.save_policy()
 
+        # plot graph
         if self.plotter is not None:
             self.plotter(trajectories.result(), num_episodes=self.eval_num_episodes)
+
+        # append to learning curve
+        self.eval_results.append(eval_reward.numpy())
+        self.eval_times.append(training_timesteps * self.tau)
 
         return trajectories.result()
 
@@ -117,19 +154,14 @@ class DDPGTrainer(Trainer):
         self.evaluator = Evaluator(env, self.policy)
 
     def train(self, batch_size=64, initial_collect_steps=1000, collect_steps_per_rollout=1) -> DDPG:
-        # (Optional) Optimize by wrapping some of the code in a graph using TF function.
         self.ddpg.agent.train = common.function(self.ddpg.agent.train)
-
         # Reset the train step
         self.ddpg.train_step_counter.assign(0)
-        returns = []
         # lambdas = [ddpg.actor_network.S.numpy()]
-
         # Collect some initial experience
         self.replay_buffer.collect_data(steps=initial_collect_steps)
 
         for iteration in range(self.num_iterations):
-
             # Collect a few steps using collect_policy and save to the replay buffer.
             self.replay_buffer.collect_data(steps=collect_steps_per_rollout)
 
@@ -143,7 +175,10 @@ class DDPGTrainer(Trainer):
             if iteration % self.eval_interval == 0:
                 print(f'--- Iteration {iteration} ---')
                 save_model = iteration > int(self.num_iterations / 3 * 2)
-                self.evaluator(save_model=save_model)
+                self.evaluator(training_timesteps=iteration, save_model=save_model)
+
+        # Update json file containing eval_results
+        self.evaluator.update_pickle()
 
         print(f'--- Finished training for {self.num_iterations} iterations ---')
         return self.ddpg
@@ -181,6 +216,9 @@ class PILCOTrainer(Trainer):
         pilco = PILCO((X, Y), controller=self.policy, horizon=timesteps, reward=R, m_init=self.m_init,
                       S_init=self.S_init)
 
+        # Initial model evaluation
+        self.evaluator(training_timesteps=0, save_model=False)
+
         # for numerical stability, we can set the likelihood variance parameters of the GP models
         for model in pilco.mgpr.models:
             model.likelihood.variance.assign(0.001)
@@ -202,7 +240,11 @@ class PILCOTrainer(Trainer):
             # Eval, save model and plot
             if rollouts % self.eval_interval == 0:
                 save_model = rollouts > int(self.num_rollouts / 2)
-                self.evaluator(save_model=save_model)
+                training_timesteps = (rollouts + initial_num_rollout) * timesteps
+                self.evaluator(training_timesteps=training_timesteps, save_model=save_model)
+
+        # Update json file containing eval_results
+        self.evaluator.update_pickle()
 
         print(f'--- Finished training for {self.num_rollouts} rollouts ---')
         return self.policy

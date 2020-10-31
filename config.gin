@@ -1,7 +1,3 @@
-# Trainer.env =...
-# Trainer.controller = ...
-# Set up controller
-
 # Shared Definitions
 import dao.envs
 load_py_env.name = 'Pendulum-v7'
@@ -12,41 +8,19 @@ pythontfenv/singleton.constructor = @load_tf_py_env
 
 plotter/singleton.constructor = @StatePlotter
 Evaluator.plotter = @plotter/singleton()
-Evaluator.saved_path = 'controllers/pendulum/ddpg_hybrid'
+Evaluator.model_path = 'controllers/pendulum/pilco_baseline'
 Evaluator.eval_num_episodes = 2
+
 
 # PILCO exclusives
 
 pythonrbfcontroller/singleton.constructor = @RbfController
 RbfController.env = @pythontfenv/singleton()
 
-pythonhybridcontroller/singleton.constructor = @HybridController
-HybridController.W = @load_weight_matrix()
-HybridController.env = @pythontfenv/singleton()
-
 PILCOTrainer.controller = @pythonrbfcontroller/singleton()
 PILCOTrainer.env = @pythontfenv/singleton()
 PILCOTrainer.weights = [2.,2.,0.3]
 PILCOTrainer.m_init = [-1.,0.,0.]
 PILCOTrainer.S_init = [0.01, 0.05, 0.01]
-PILCOTrainer.num_rollouts = 5
-
-
-# DDPG exclusives
-
-ddpgsingleton/singleton.constructor = @DDPG
-
-DDPG.env = @pythontfenv/singleton()
-DDPG.linear_controller = @LinearControllerLayer()
-#DDPG.linear_controller = None # Uncomment this and comment above to switch between normal DDPG and our upgraded version
-LinearControllerLayer.W = @load_weight_matrix()
-LinearControllerLayer.env = @pythontfenv/singleton()
-
-ReplayBuffer.ddpg = @ddpgsingleton/singleton()
-ReplayBuffer.env = @pythontfenv/singleton()
-
-DDPGTrainer.env = @pythontfenv/singleton()
-DDPGTrainer.ddpg = @ddpgsingleton/singleton()
-DDPGTrainer.replay_buffer = @ReplayBuffer()
-DDPGTrainer.num_iterations = 1000
-DDPGTrainer.eval_interval = 200
+PILCOTrainer.num_rollouts = 1
+PILCOTrainer.eval_interval = 1
