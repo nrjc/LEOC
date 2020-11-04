@@ -38,6 +38,7 @@ class Visualiser:
     """
     To visualise and check on policy
     """
+
     def __init__(self, env: TFPyEnvironment, policy: TFPolicy, model_path: str = None):
         self.env = env
         self.policy = policy
@@ -124,7 +125,7 @@ class Evaluator:
         final_time_step, _ = driver.run(policy_state=())
 
         eval_reward = avg_reward.result()
-        print(f'Eval_reward = {eval_reward}')
+        print(f'Evaluator eval_reward = {eval_reward}, on average of {self.eval_num_episodes} episodes.')
 
         # save model
         if save_model and eval_reward > self.best_reward:
@@ -177,7 +178,7 @@ class DDPGTrainer(Trainer):
                 save_model = iteration > int(self.num_iterations / 3 * 2)
                 self.evaluator(training_timesteps=iteration, save_model=save_model)
 
-        # Update json file containing eval_results
+        # Update pickle file containing eval_results
         self.evaluator.update_pickle()
 
         print(f'--- Finished training for {self.num_iterations} iterations ---')
@@ -189,6 +190,8 @@ class PILCOTrainer(Trainer):
     def __init__(self, env: TFPyEnvironment, controller: TFPolicy, weights: List[float], m_init: List[float],
                  S_init: List[float], num_rollouts: int = 10, eval_interval: int = 1):
         super().__init__(env, controller)
+        self.env = TFPy2Gym(self.env)
+        self.target = self.env.target
         self.weights = np.array(np.diag(weights), dtype=float_type)
         self.m_init = np.array(np.reshape(m_init, (1, -1)), dtype=float_type)
         self.S_init = np.array(np.diag(S_init), dtype=float_type)
@@ -200,16 +203,13 @@ class PILCOTrainer(Trainer):
               max_training_restarts: int = 2, max_policy_restarts: int = 2) \
             -> tf.Module:
 
-        env = TFPy2Gym(self.env)
-        target = env.target
-
-        R = ExponentialReward(state_dim=self.env.observation_spec().shape[0], t=target, W=self.weights)
+        R = ExponentialReward(state_dim=self.env.observation_spec().shape[0], t=self.target, W=self.weights)
 
         # Initial random rollouts to generate a dataset
-        X, Y, _, _ = rollout(env=env, pilco=None, timesteps=timesteps, random=True, SUBS=subs, render=False,
+        X, Y, _, _ = rollout(env=self.env, pilco=None, timesteps=timesteps, random=True, SUBS=subs, render=False,
                              verbose=False)
         for i in range(1, initial_num_rollout):
-            X_, Y_, _, _ = rollout(env=env, pilco=None, timesteps=timesteps, random=True, SUBS=subs, render=False,
+            X_, Y_, _, _ = rollout(env=self.env, pilco=None, timesteps=timesteps, random=True, SUBS=subs, render=False,
                                    verbose=False)
             X = np.vstack((X, X_))
             Y = np.vstack((Y, Y_))
@@ -229,7 +229,7 @@ class PILCOTrainer(Trainer):
             policy_restarts = 1 if rollouts > 3 else max_policy_restarts
             pilco.optimize_models(maxiter=max_iter_policy_train, restarts=max_training_restarts)
             pilco.optimize_policy(maxiter=max_iter_policy_train, restarts=policy_restarts)
-            X_new, Y_new, _, _ = rollout(env, pilco, timesteps=timesteps, verbose=False, SUBS=subs)
+            X_new, Y_new, _, _ = rollout(self.env, pilco, timesteps=timesteps, verbose=False, SUBS=subs)
             _, _, reward = pilco.predict(X_new[0, None, :-1], 0.001 * self.S_init, timesteps)
 
             # Update dataset
@@ -243,7 +243,7 @@ class PILCOTrainer(Trainer):
                 training_timesteps = (rollouts + initial_num_rollout) * timesteps
                 self.evaluator(training_timesteps=training_timesteps, save_model=save_model)
 
-        # Update json file containing eval_results
+        # Update pickle file containing eval_results
         self.evaluator.update_pickle()
 
         print(f'--- Finished training for {self.num_rollouts} rollouts ---')

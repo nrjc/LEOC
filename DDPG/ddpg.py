@@ -17,10 +17,8 @@ from gpflow import config
 from typing import Optional
 
 import tensorflow as tf
-from tf_agents.networks import network
 from tf_agents.specs import BoundedArraySpec
 from tf_agents.trajectories import policy_step
-from tf_agents.typing import types
 from tf_agents.agents import DdpgAgent, tf_agent
 from tf_agents.agents.ddpg import actor_network, critic_network
 from tf_agents.drivers import dynamic_step_driver
@@ -77,7 +75,7 @@ class MyActorNetwork(actor_network.ActorNetwork):
         if controller_location is None:
             controller_location = tf.zeros(shape=input_tensor_spec.shape, dtype=float_type)
         if S is None:
-            S = [100. for i in range(input_tensor_spec.shape[0])]
+            S = [1. for i in range(input_tensor_spec.shape[0])]
         self.a = tf.Variable(initial_value=controller_location, dtype=float_type, trainable=False)
         # self.S = tf.Variable(tf.ones(shape=input_tensor_spec.shape, dtype=float_type),
         #                      constraint=lambda x: tf.clip_by_value(x, 0, np.infty), trainable=True)
@@ -235,10 +233,10 @@ class DDPG(tf.Module):
 
 @gin.configurable
 class ReplayBuffer(object):
-    def __init__(self, ddpg, env, replay_buffer_capacity=100000, initial_collect_steps=1000,
+    def __init__(self, ddpg, replay_buffer_capacity=100000, initial_collect_steps=1000,
                  collect_steps_per_iteration=1):
         self.agent = ddpg.agent
-        self.env = env
+        self.env = ddpg.env
         self.buffer = tf_uniform_replay_buffer.TFUniformReplayBuffer(
             data_spec=self.agent.collect_data_spec,
             batch_size=self.env.batch_size,
