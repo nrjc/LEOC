@@ -107,6 +107,7 @@ class MyActorNetwork(actor_network.ActorNetwork):
         else:
             g_actions = 0.0
             g_actions = tf.cast(g_actions, float_type)  # convert to float64
+
         observations = tf.nest.flatten(observations)
         output = observations[0]
         for layer in self._mlp_layers:
@@ -171,10 +172,11 @@ class MyDdpgAgent(DdpgAgent):
 
 @gin.configurable
 class DDPG(tf.Module):
-    def __init__(self, env: TFPyEnvironment, linear_controller=None, S=None, name='DDPG_agent', ):
+    def __init__(self, env: TFPyEnvironment, linear_controller=None, S=None, name='DDPG_agent',
+                 actor_learning_rate=5e-4):
         super().__init__(name=name)
         self.env = env
-        self.actor_learning_rate = 1e-3
+        self.actor_learning_rate = actor_learning_rate
         self.critic_learning_rate = 1e-3
         self.actor_network = MyActorNetwork(
             self.env.observation_spec(),
@@ -213,7 +215,7 @@ class DDPG(tf.Module):
             critic_network=self.critic_network,
             actor_optimizer=self.actor_optimizer,
             critic_optimizer=self.critic_optimizer,
-            ou_stddev=.5,
+            ou_stddev=1.,
             ou_damping=.2,
             target_actor_network=None,
             target_critic_network=None,
@@ -233,7 +235,7 @@ class DDPG(tf.Module):
 
 @gin.configurable
 class ReplayBuffer(object):
-    def __init__(self, ddpg, replay_buffer_capacity=100000, initial_collect_steps=1000,
+    def __init__(self, ddpg: DDPG, replay_buffer_capacity=100000, initial_collect_steps=1000,
                  collect_steps_per_iteration=1):
         self.agent = ddpg.agent
         self.env = ddpg.env

@@ -61,9 +61,9 @@ class Visualiser:
 
 @gin.configurable
 class Evaluator:
-    def __init__(self, env: TFPyEnvironment, policy: TFPolicy, plotter: Plotter = None,
+    def __init__(self, eval_env: TFPyEnvironment, policy: TFPolicy, plotter: Plotter = None,
                  model_path: str = None, eval_num_episodes: int = 1):
-        self.env = env
+        self.env = eval_env
         self.policy = policy
         self.model_path = model_path
         self.best_reward = -np.finfo(float_type).max
@@ -131,6 +131,7 @@ class Evaluator:
         if save_model and eval_reward > self.best_reward:
             self.best_reward = eval_reward
             self.save_policy()
+            print(f'Policy saved at {self.model_path}')
 
         # plot graph
         if self.plotter is not None:
@@ -145,11 +146,10 @@ class Evaluator:
 
 @gin.configurable
 class DDPGTrainer(Trainer):
-    def __init__(self, env: TFPyEnvironment, ddpg: DDPG, replay_buffer: ReplayBuffer,
-                 num_iterations: int = 10000, eval_interval: int = 200):
+    def __init__(self, env: TFPyEnvironment, ddpg: DDPG, num_iterations: int = 10000, eval_interval: int = 200):
         self.ddpg = ddpg
         super().__init__(env, self.ddpg.agent.policy)
-        self.replay_buffer = replay_buffer
+        self.replay_buffer = ReplayBuffer(self.ddpg)
         self.num_iterations = num_iterations
         self.eval_interval = eval_interval
         self.evaluator = Evaluator(env, self.policy)
@@ -169,6 +169,7 @@ class DDPGTrainer(Trainer):
             # Sample a batch of data from the buffer and update the agent's network.
             iterator = self.replay_buffer.get_dataset(batch_size)
             experience, _ = next(iterator)
+            train_loss = self.ddpg.agent.train(experience).loss
 
             # lambdas.append(ddpg.actor_network.S.numpy())
 

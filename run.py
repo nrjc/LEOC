@@ -17,11 +17,15 @@ from dao.trainer import PILCOTrainer, DDPGTrainer
 
 gin.parse_config_file('config.gin')
 # %%
-# ddpg_trainer = DDPGTrainer()
-# # %%
-# ddpg_trainer.train()
+ddpg_trainer = DDPGTrainer()
+# %%
+ddpg_trainer.train()
 # #%%
-pilco_trainer = PILCOTrainer()
+# pilco_trainer = PILCOTrainer()
+# #%%
+# pilco_trainer.train()
 #%%
-pilco_trainer.train()
-#%%
+
+
+# # Load and test control metrics
+# pilco_trainer = PILCOTrainer()
