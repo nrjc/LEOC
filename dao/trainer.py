@@ -191,6 +191,7 @@ class PILCOTrainer(Trainer):
     def __init__(self, env: TFPyEnvironment, controller: TFPolicy, weights: List[float], m_init: List[float],
                  S_init: List[float], num_rollouts: int = 10, eval_interval: int = 1):
         super().__init__(env, controller)
+        self.state_dim = self.env.observation_spec().shape[0]
         self.env = TFPy2Gym(self.env)
         self.target = self.env.target
         self.weights = np.array(np.diag(weights), dtype=float_type)
@@ -204,7 +205,7 @@ class PILCOTrainer(Trainer):
               max_training_restarts: int = 2, max_policy_restarts: int = 2) \
             -> tf.Module:
 
-        R = ExponentialReward(state_dim=self.env.observation_spec().shape[0], t=self.target, W=self.weights)
+        R = ExponentialReward(state_dim=self.state_dim, t=self.target, W=self.weights)
 
         # Initial random rollouts to generate a dataset
         X, Y, _, _ = rollout(env=self.env, pilco=None, timesteps=timesteps, random=True, SUBS=subs, render=False,
