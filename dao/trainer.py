@@ -39,10 +39,10 @@ class Visualiser:
     To visualise and check on policy
     """
 
-    def __init__(self, env: TFPyEnvironment, policy: TFPolicy, model_path: str = None):
+    def __init__(self, env: TFPyEnvironment, model_path: str = None):
         self.env = env
-        self.policy = policy
         self.model_path = model_path
+        self.load()
 
     def load(self):
         self.policy = tf.compat.v2.saved_model.load(self.model_path)
