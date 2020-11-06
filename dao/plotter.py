@@ -1,3 +1,6 @@
+import os
+import pickle
+import re
 from typing import List, Tuple
 import gin
 import numpy as np
@@ -21,7 +24,6 @@ class Plotter(object):
         self.actions = []
         self.ratio = []
         self.timesteps = 0
-        plt.style.use('seaborn-darkgrid')
 
     def __call__(self, trajectories: List[Trajectory], **kwargs) -> None:
         raise NotImplementedError
@@ -144,10 +146,77 @@ class LearningCurvePlotter(object):
     """
     This class plots learning curves for the entire training session from
     a list of np.arrays
+
+    Input:
+        rewards: a dictionary of the rewards
+        The content of the dictionary should be structured as such:
+        dict['controller/env/model'] = [([interaction time for x-axis ... ], [eval rewards for y-axis ... ]) ... ]
+        The dictionary can be loaded from a pickle file using the load_pickle function
     """
 
-    def __init__(self, rewards: List[np.ndarray]):
+    def __init__(self, rewards: dict = None, pickle_path: str = None):
         self.rewards = rewards
+        self.pickle_path = pickle_path
+        if self.pickle_path:
+            self.load_pickle()
+
+    def load_pickle(self):
+        # load pickle into memory
+        if os.path.isfile(self.pickle_path) and os.access(self.pickle_path, os.R_OK):
+            # checks if file exists
+            with open(self.pickle_path, 'rb') as f:
+                self.rewards = pickle.load(f)
+        else:
+            raise Exception('--- Error: No pickle file found! ---')
 
     def __call__(self) -> None:
-        pass
+        # Partition the data into lines, each line representing a controller
+        lines = self.rewards.keys()
+        all = {}
+        averages = {}
+        best = {}
+        worst = {}
+        xs = {}
+
+        for key in self.rewards:
+            # Put the data for each line into an ndarray. Put this ndarray into dict all.
+            xs[key] = np.array(self.rewards[key][0][0])
+            all[key] = np.array(self.rewards[key][0][1])
+            if len(self.rewards[key]) == 1:
+                all[key] = np.expand_dims(all[key], axis=0)
+            for i in range(1, len(self.rewards[key])):
+                all[key] = np.vstack((all[key], self.rewards[key][i][1]))
+
+            # Compute average, best, worst
+            best_reward, worst_reward = np.max(all[key]), np.min(all[key])
+            averages[key] = np.mean(all[key], axis=0)
+            best[key] = np.max(all[key], axis=0)
+            worst[key] = np.min(all[key], axis=0)
+            # Standardisation
+            averages[key] = (averages[key] - best_reward) / (best_reward - worst_reward) + 1.0
+            best[key] = (best[key] - best_reward) / (best_reward - worst_reward) + 1.0
+            worst[key] = (worst[key] - best_reward) / (best_reward - worst_reward) + 1.0
+
+        # Plot graph
+        titles = ['Pendulum', 'Cartpole', 'Mountaincar']
+        regex = [r'controllers/pendulum/.*', r'controllers/cartpole/.*', r'controllers/mountaincar/.*']
+        colors = ['mediumblue', 'dodgerblue', 'firebrick', 'orange', 'green']
+        total_graphs = 3
+
+        fig, axs = plt.subplots(1, total_graphs, figsize=(15, 5))  #, constrained_layout=True)
+        for i in range(total_graphs):
+            cur_axis = axs[i]
+            j = 0
+            for line in lines:
+                if re.match(regex[i], line):
+                    cur_axis.plot(xs[line], averages[line], color=colors[j], label=line)
+                    cur_axis.fill_between(xs[line], worst[line], best[line], alpha=0.5, facecolor=colors[j])
+                    j += 1
+
+            cur_axis.set_ylim(0.0, 1.0)
+            cur_axis.set_xlabel('Interaction time (s)')
+            cur_axis.set_ylabel('Standardised rewards \u00B1 ')
+            cur_axis.legend()
+            cur_axis.set_title(titles[i])
+
+        plt.show()
