@@ -24,12 +24,23 @@ register(
 )
 register(
     id='Mountaincar-v7',
-    entry_point='dao.envs.mountain_car_env:Continuous_MountainCarEnv',
+    entry_point='dao.envs.mountaincar_env:ContinuousMountainCarEnv',
     max_episode_steps=200,
 )
 register(
     id='Mountaincar-v8',
-    entry_point='dao.envs.mountain_car_env:Continuous_MountainCarEnv',
+    entry_point='dao.envs.mountaincar_env:ContinuousMountainCarEnv',
+    max_episode_steps=200,
+    kwargs={'top': True}
+)
+register(
+    id='Mountaincar-v1',
+    entry_point='dao.envs.mountaincar_discrete_env:ContinuousMountainCarEnv',
+    max_episode_steps=200,
+)
+register(
+    id='Mountaincar-v2',
+    entry_point='dao.envs.mountaincar_discrete_env:ContinuousMountainCarEnv',
     max_episode_steps=200,
     kwargs={'top': True}
 )

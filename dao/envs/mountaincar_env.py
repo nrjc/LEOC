@@ -15,26 +15,27 @@ from typing import List
 import numpy as np
 import gym
 from gym import spaces, logger
-from gym.utils import seeding
+from gym.envs.classic_control import MountainCarEnv
 
 float_type = np.float64
 
 
-class Continuous_MountainCarEnv(gym.Env):
+class ContinuousMountainCarEnv(MountainCarEnv):
     metadata = {
         'render.modes': ['human', 'rgb_array'],
         'video.frames_per_second': 50
     }
 
     def __init__(self, top=False):
-        self.position_min = -2 * np.pi
-        self.position_max = 1.5 * np.pi
+        self.min_position = -3.6 - np.pi / 2
+        self.max_position = 2.2 - np.pi / 2
         self.x_offset = 0.0
         self.x_scale = 1.0
-        self.y_offset = 2.0
-        self.y_scale = 1.0
+        self.y_offset = 1.65
+        self.y_scale = 1.35
         self.starting_position = (-np.pi - self.x_offset) / self.x_scale
         self.goal_position = (0.0 - self.x_offset) / self.x_scale
+        self.goal_velocity = 0.0
         self.top = top
         self.gravity = 9.8
         self.masscart = 0.1
@@ -42,10 +43,10 @@ class Continuous_MountainCarEnv(gym.Env):
         self.tau = 0.02  # seconds between state updates
 
         self.low_state = np.array(
-            [self.position_min, -np.finfo(float_type).max], dtype=float_type
+            [self.min_position, -np.finfo(float_type).max], dtype=float_type
         )
         self.high_state = np.array(
-            [self.position_max, np.finfo(float_type).max], dtype=float_type
+            [self.max_position, np.finfo(float_type).max], dtype=float_type
         )
 
         self.action_space = spaces.Box(
@@ -63,14 +64,9 @@ class Continuous_MountainCarEnv(gym.Env):
         self.seed()
         self.viewer = None
         self.state = None
-        self.reset()
         self.steps_beyond_done = None
         self.weights = np.diag([2.0, 0.4])
-        self.target = np.array([0.0, 0.0])
-
-    def seed(self, seed=None):
-        self.np_random, seed = seeding.np_random(seed)
-        return [seed]
+        self.target = np.array([self.goal_position, self.goal_velocity])
 
     def step(self, action):
         err_msg = "%r (%s) invalid" % (action, type(action))
@@ -87,13 +83,13 @@ class Continuous_MountainCarEnv(gym.Env):
 
         # Convert a possible numpy bool to a Python bool.
         done = bool(
-            position < self.position_min
-            or position > self.position_max
+            position < self.min_position
+            or position > self.max_position
         )
 
         reward = - 0.1 * (5 * (position ** 2) + (velocity ** 2) + .05 * (force ** 2))
         if done:
-            reward -= 100
+            reward -= 100.0
 
         return self._get_obs(), reward, done, {}
 
@@ -104,7 +100,7 @@ class Continuous_MountainCarEnv(gym.Env):
             noise = self.np_random.uniform(low=-high, high=high)
         else:
             self.state = np.array([self.starting_position, 0])
-            high = np.array([np.pi * (30 / 180) / self.x_scale, 0.1])
+            high = np.array([np.pi / 180 * 10 / self.x_scale, 0.1])
             noise = self.np_random.uniform(low=-high, high=high)
         self.state = self.state + noise
         self.steps_beyond_done = None
@@ -124,17 +120,17 @@ class Continuous_MountainCarEnv(gym.Env):
         screen_width = 600
         screen_height = 400
 
-        world_width = self.position_max - self.position_min
-        scale = screen_width/world_width
+        world_width = self.max_position - self.min_position
+        scale = screen_width / world_width
         carwidth = 40
         carheight = 20
 
         if self.viewer is None:
             from gym.envs.classic_control import rendering
             self.viewer = rendering.Viewer(screen_width, screen_height)
-            xs = np.linspace(self.position_min, self.position_max, 100)
+            xs = np.linspace(self.min_position, self.max_position, 100)
             ys = self._height(xs)
-            xys = list(zip((xs-self.position_min)*scale, ys*scale))
+            xys = list(zip((xs - self.min_position) * scale, ys * scale))
 
             self.track = rendering.make_polyline(xys)
             self.track.set_linewidth(4)
@@ -162,8 +158,8 @@ class Continuous_MountainCarEnv(gym.Env):
             backwheel.add_attr(self.cartrans)
             backwheel.set_color(.5, .5, .5)
             self.viewer.add_geom(backwheel)
-            flagx = (self.goal_position-self.position_min)*scale
-            flagy1 = self._height(self.goal_position)*scale
+            flagx = (self.goal_position - self.min_position) * scale
+            flagy1 = self._height(self.goal_position) * scale
             flagy2 = flagy1 + 50
             flagpole = rendering.Line((flagx, flagy1), (flagx, flagy2))
             self.viewer.add_geom(flagpole)
@@ -175,7 +171,7 @@ class Continuous_MountainCarEnv(gym.Env):
 
         pos = self.state[0]
         self.cartrans.set_translation(
-            (pos-self.position_min) * scale, self._height(pos) * scale
+            (pos - self.min_position) * scale, self._height(pos) * scale
         )
         rotation = np.arctan(self._gradient(pos))
         self.cartrans.set_rotation(rotation)
@@ -210,8 +206,3 @@ class Continuous_MountainCarEnv(gym.Env):
         Q = np.diag([2.0, 0.3])
 
         return A, B, C, Q
-
-    def close(self):
-        if self.viewer:
-            self.viewer.close()
-            self.viewer = None
