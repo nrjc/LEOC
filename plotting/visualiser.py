@@ -12,7 +12,8 @@ class Visualiser:
     def __init__(self, env: TFPyEnvironment, model_path: str = None):
         self.env = env
         self.model_path = model_path
-        self.load()
+        if model_path:
+            self.load()
 
     def load(self):
         self.policy = tf.compat.v2.saved_model.load(self.model_path)

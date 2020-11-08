@@ -41,7 +41,8 @@ class Evaluator:
         self.policy = policy
         self.model_path = model_path
         self.best_reward = -np.finfo(float_type).max
-        self.saver = policy_saver.PolicySaver(self.policy, batch_size=None)
+        if self.policy is not None:
+            self.saver = policy_saver.PolicySaver(self.policy, batch_size=None)
         self.eval_num_episodes = eval_num_episodes
         self.plotter = plotter
         self.pickle_path = 'results.pickle'

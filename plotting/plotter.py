@@ -28,6 +28,14 @@ class Plotter(object):
     def __call__(self, trajectories: List[Trajectory], **kwargs) -> None:
         raise NotImplementedError
 
+    def _helper(self, trajectories: List[Trajectory], num_episodes: int = 1) -> None:
+        self.trajectories = trajectories
+        self.observations = [x.observation for x in trajectories]
+        self.rewards = [x.reward for x in trajectories]
+        self.actions = [x.action for x in trajectories]
+        self.ratio = [x.policy_info for x in trajectories]
+        self.timesteps = int(len(self.observations) / num_episodes)
+
     def traj2obs(self) -> np.ndarray:
         """
         Input:
@@ -39,17 +47,23 @@ class Plotter(object):
         observations = np.array(observations[:self.timesteps])
         return observations
 
-    def traj2theta(self, obs_idx: int, acos: bool) -> np.ndarray:
+    def traj2theta(self, obs_idx: int, acos: bool = False, asin: bool = False) -> np.ndarray:
         """
         Input:
             trajectories: trajectories from eval
-            obs_idx: index of the observation corresponding to cosine
+            obs_idx: index of the observation corresponding to cosine or sine
         Output:
             np.ndarray of states
         """
         observations = self.traj2obs()
-        cos_theta = observations[:self.timesteps, obs_idx]
-        theta = tf.math.acos(cos_theta) if acos else cos_theta
+        theta = observations[:self.timesteps, obs_idx]
+
+        assert not (acos and asin), '--- Error: Both acos and asin are True! ---'
+        if asin:
+            theta = tf.math.asin(theta)
+        elif acos:
+            theta = tf.math.acos(theta)
+        theta = theta / np.pi * 180
         return theta
 
     def traj2info(self) -> np.ndarray:
@@ -70,67 +84,109 @@ class Plotter(object):
 @gin.configurable
 class StatePlotter(Plotter):
     def __init__(self, env: PyEnvironment):
-        super(StatePlotter, self).__init__()
+        super().__init__()
+        self.env_name = env.unwrapped.spec.id[:-3]
+
         # Depending on the env, cos(theta) or state of interest is located at different obs_idx
-        if env.unwrapped.spec.id == 'Pendulum-v7' or env.unwrapped.spec.id == 'Pendulum-v8':
+        if self.env_name == 'Pendulum':
             self.acos = True
+            self.asin = False
             self.obs_idx = 0
-        elif env.unwrapped.spec.id == 'Cartpole-v7' or env.unwrapped.spec.id == 'Cartpole-v8':
+        elif self.env_name == 'Cartpole':
             self.acos = True
+            self.asin = False
             self.obs_idx = 2
-        elif env.unwrapped.spec.id == 'Mountaincar-v7' or env.unwrapped.spec.id == 'Mountaincar-v8':
+        elif self.env_name == 'Mountaincar':
             self.acos = False
+            self.asin = False
             self.obs_idx = 0
         else:
             raise Exception('--- Error: Wrong env in StatePlotter ---')
 
-    def __call__(self, trajectories: List[Trajectory], num_episodes=1) -> None:
-        self.trajectories = trajectories
-        self.observations = [x.observation for x in trajectories]
-        self.rewards = [x.reward for x in trajectories]
-        self.actions = [x.action for x in trajectories]
-        self.ratio = [x.policy_info for x in trajectories]
-        self.timesteps = int(len(self.observations) / num_episodes)
+    def __call__(self, trajectories: List[Trajectory], num_episodes: int = 1) -> None:
+        super()._helper(trajectories, num_episodes)
 
-        thetas = self.traj2theta(self.obs_idx, self.acos)
+        thetas = self.traj2theta(obs_idx=self.obs_idx, acos=self.acos)
         ratios = self.traj2info()
 
         fig, ax1 = plt.subplots(figsize=(6, 4))
 
         # Plot theta
         ln1 = ax1.plot(np.arange(self.timesteps), thetas, color='royalblue', label='\u03B8')
+        ax1.set_ylim(0, 180)
         ax1.set_xlabel('Timesteps')
-        ax1.legend()
-        ax1.set_title(f'\u03B8 and Controller Ratio')
+        ax1.set_ylabel(f'\u03B8 (\u00B0)')
 
         # Plot linear ratio
         ax2 = ax1.twinx()
         ln2 = ax2.plot(np.arange(self.timesteps), ratios, color='darkorange', label='Controller Ratio')
+        ax2.set_ylim(0.0, 1.0)
+        ax2.set_ylabel(f'Linear Controller Ratio')
+        ax2.grid(False)
 
         # Set legend and format
         lns = ln1 + ln2
         labs = [l.get_label() for l in lns]
         ax1.legend(lns, labs, loc=7)
-        ax2.grid(False)
+        ax1.set_title(f'\u03B8 and Linear Controller Ratio')
         fig.show()
 
 
 @gin.configurable
 class ControlMetricsPlotter(Plotter):
     def __init__(self, env: PyEnvironment):
-        super(ControlMetricsPlotter, self).__init__(env)
+        super().__init__()
+        self.env_name = env.unwrapped.spec.id[:-3]
 
-    def __call__(self, trajectories: List[Trajectory]) -> None:
-        pass
+        # Depending on the env, sin(theta) or state of interest is located at different obs_idx
+        if self.env_name == 'Pendulum':
+            self.asin = True
+            self.acos = False
+            self.obs_idx = 1
+        elif self.env_name == 'Cartpole':
+            self.asin = True
+            self.acos = False
+            self.obs_idx = 3
+        elif self.env_name == 'Mountaincar':
+            self.asin = False
+            self.acos = False
+            self.obs_idx = 0
+        else:
+            raise Exception('--- Error: Wrong env in ControlMetricsPlotter ---')
 
-    def traj2metrics(self, target: List[float], stability_bound: float) -> Tuple[float, int, int]:
+    def __call__(self, trajectories: List[List[Trajectory]], num_episodes: int = 1) -> None:
+        fig, ax = plt.subplots(figsize=(6, 4))
+        lns, labs = [], []
+        colors = ['mediumblue', 'dodgerblue', 'firebrick', 'orange', 'green']
+        labels = ['DDPG_baseline', 'DDPG_hybrid', 'PILCO_baseline', 'PILCO_hybrid', 'linear_ctrl']
+        j = 0
+
+        for trajectory in trajectories:
+            super()._helper(trajectory, num_episodes)
+            thetas = self.traj2theta(obs_idx=self.obs_idx, asin=self.asin)
+
+            # Plot theta
+            ln = ax.plot(np.arange(self.timesteps), thetas, color=colors[j], label=labels[j])
+            lns = lns + ln
+            j += 1
+
+        ax.set_xlabel('Timesteps')
+        ax.set_ylabel(f'\u03B8 (\u00B0)')
+
+        # Set legend and format
+        labs = [l.get_label() for l in lns]
+        ax.legend(lns, labs)
+        ax.set_title(f'{self.env_name}')
+        fig.show()
+
+    def obs2metrics(self, target: List[float], stability_bound: float) -> Tuple[float, int, int]:
         """
         Input:
             trajectories: trajectories from eval
         Output:
             np.ndarray of the control theory metrics
         """
-        theta = self.traj2theta()
+        theta = self.traj2theta(obs_idx=self.obs_idx, asin=self.asin)
         peak_overshot = max(abs(theta)) - target
         rising_time = theta.index(max(theta))
 
