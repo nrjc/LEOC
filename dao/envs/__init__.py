@@ -8,7 +8,7 @@ register(
 register(
     id='Pendulum-v8',
     entry_point='dao.envs.pendulum_env:SwingUpEnv',
-    max_episode_steps=200,
+    max_episode_steps=100,
     kwargs={'top': True}
 )
 register(
@@ -19,7 +19,7 @@ register(
 register(
     id='Cartpole-v8',
     entry_point='dao.envs.cartpole_env:CartPoleEnv',
-    max_episode_steps=200,
+    max_episode_steps=300,
     kwargs={'top': True}
 )
 register(

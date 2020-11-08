@@ -95,14 +95,12 @@ class ContinuousMountainCarEnv(MountainCarEnv):
 
     def reset(self):
         if self.top:
-            self.state = np.array([0., 0.])
-            high = np.array([np.pi * (2 / 180) / self.x_scale, 0.1])
-            noise = self.np_random.uniform(low=-high, high=high)
+            self.state = np.array([-np.pi * (1 / 180) / self.x_scale, 0.0])
         else:
             self.state = np.array([self.starting_position, 0])
             high = np.array([np.pi / 180 * 10 / self.x_scale, 0.1])
             noise = self.np_random.uniform(low=-high, high=high)
-        self.state = self.state + noise
+            self.state = self.state + noise
         self.steps_beyond_done = None
         return self._get_obs()
 

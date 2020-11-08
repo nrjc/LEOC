@@ -149,14 +149,12 @@ class CartPoleEnv(gym.Env):
 
     def reset(self):
         if self.top:
-            self.state = [0.0, 0.0, 0.0, 0.0]
-            high = np.array([0.1, 0.1, 0.1, 0.1])
-            noise = self.np_random.uniform(low=-high, high=high)
+            self.state = np.array([0.0, 0.0, -np.pi / 180 * 1, 0.0])
         else:
             self.state = [0.0, 0.0, np.pi, 0.0]
             high = np.array([0.1, 0.1, np.pi / 180 * 10, 0.1])
             noise = self.np_random.uniform(low=-high, high=high)
-        self.state = self.state + noise
+            self.state = self.state + noise
         self.steps_beyond_done = None
         return self._get_obs()
 
