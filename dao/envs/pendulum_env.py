@@ -7,8 +7,10 @@ float_type = np.float64
 
 
 class SwingUpEnv(PendulumEnv):
-    def __init__(self, top=False, name=None):
+    def __init__(self, top=False, name=None, scaling_ratio=1.0):
         super().__init__()
+        self.m *= scaling_ratio
+        self.l *= scaling_ratio
         self.up = top
         self.target = np.array([1.0, 0.0, 0.0])
         self.tau = self.dt

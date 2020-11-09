@@ -1,7 +1,7 @@
 import os
 import pickle
 import re
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 import gin
 import numpy as np
 from matplotlib import pyplot as plt
@@ -198,6 +198,68 @@ class ControlMetricsPlotter(Plotter):
         return (peak_overshot, rising_time, settling_time)
 
 
+@gin.configurable
+class RobustnessPlotter(Plotter):
+
+    def __init__(self, env: PyEnvironment):
+        super().__init__()
+        self.env_name = env.unwrapped.spec.id[:-3]
+        # Depending on the env, sin(theta) or state of interest is located at different obs_idx
+        if self.env_name == 'Pendulum':
+            self.asin = True
+            self.acos = False
+            self.obs_idx = 1
+        elif self.env_name == 'Cartpole':
+            self.asin = True
+            self.acos = False
+            self.obs_idx = 3
+        elif self.env_name == 'Mountaincar':
+            self.asin = False
+            self.acos = False
+            self.obs_idx = 0
+        else:
+            raise Exception('--- Error: Wrong env in ControlMetricsPlotter ---')
+
+    def __call__(self,
+                 dict_of_dict_controller_name_scaling_trajectory: Dict[str, Dict[float, List[Trajectory]]]) -> None:
+        fig, ax = plt.subplots(figsize=(6, 4))
+        lns, labs = [], []
+        colors = ['mediumblue', 'dodgerblue', 'firebrick', 'orange', 'green']
+        labels = ['DDPG_baseline', 'DDPG_hybrid', 'PILCO_baseline', 'PILCO_hybrid', 'linear_ctrl']
+
+        for i, (controller_name, dict_scaling_trajectory) in enumerate(dict_of_dict_controller_name_scaling_trajectory.items()):
+            scale, overshoot, rise, settle = [], [], [], []
+            for scaling, trajectory in dict_scaling_trajectory.items():
+                self._helper(trajectory)
+                theta = self.traj2theta(obs_idx=self.obs_idx, asin=self.asin)
+                overshoot, rising_time, settling_time = self._obtain_metrics(theta)
+                scale.append(scaling)
+                overshoot.append(overshoot)
+                rising_time.append(rising_time)
+                settling_time.append(settling_time)
+            ln = ax.plot(scale, rise, color=colors[i % len(colors)], label=controller_name)
+
+        ax.set_xlabel('Timesteps')
+        ax.set_ylabel(f'\u03B8 (\u00B0)')
+
+        # Set legend and format
+        labs = [l.get_label() for l in lns]
+        ax.legend(lns, labs)
+        ax.set_title(f'{self.env_name}')
+        fig.show()
+        pass
+
+    def _obtain_metrics(self, theta, target: float = 0, stability_bound: float = (np.pi * 0.1) / 180):
+        peak_overshot = max(abs(theta)) - target
+        rising_time = theta.index(max(theta))
+
+        theta_reverse = theta[::-1]
+        upper_stability_bound, lower_stability_bound = target + stability_bound, target - stability_bound
+        settling_time = np.argmax(lower_stability_bound < theta_reverse < upper_stability_bound)
+        settling_time = len(theta_reverse) - settling_time
+        return (peak_overshot, rising_time, settling_time)
+
+
 class LearningCurvePlotter(object):
     """
     This class plots learning curves for the entire training session from
@@ -259,7 +321,7 @@ class LearningCurvePlotter(object):
         colors = ['mediumblue', 'dodgerblue', 'firebrick', 'orange', 'green']
         total_graphs = 3
 
-        fig, axs = plt.subplots(1, total_graphs, figsize=(15, 5))  #, constrained_layout=True)
+        fig, axs = plt.subplots(1, total_graphs, figsize=(15, 5))  # , constrained_layout=True)
         for i in range(total_graphs):
             cur_axis = axs[i]
             j = 0

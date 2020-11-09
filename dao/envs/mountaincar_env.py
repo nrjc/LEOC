@@ -26,7 +26,7 @@ class ContinuousMountainCarEnv(MountainCarEnv):
         'video.frames_per_second': 50
     }
 
-    def __init__(self, top=False):
+    def __init__(self, top=False, scaling_ratio=1.0):
         self.min_position = -3.6 - np.pi / 2
         self.max_position = 2.2 - np.pi / 2
         self.x_offset = 0.0
@@ -37,8 +37,8 @@ class ContinuousMountainCarEnv(MountainCarEnv):
         self.goal_position = (0.0 - self.x_offset) / self.x_scale
         self.goal_velocity = 0.0
         self.top = top
-        self.gravity = 9.8
-        self.masscart = 0.1
+        self.gravity = 9.8 * scaling_ratio
+        self.masscart = 0.1 * scaling_ratio
         self.force_max = 3.0
         self.tau = 0.02  # seconds between state updates
 

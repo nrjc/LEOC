@@ -60,10 +60,10 @@ class CartPoleEnv(gym.Env):
         'video.frames_per_second': 50
     }
 
-    def __init__(self, top=False):
+    def __init__(self, top=False, scaling_ratio = 1.0):
         self.gravity = 9.8
-        self.masscart = 0.05
-        self.masspole = 0.005
+        self.masscart = 0.05 * scaling_ratio
+        self.masspole = 0.005 * 1./scaling_ratio
         self.total_mass = (self.masspole + self.masscart)
         self.length = 0.5  # actually half the pole's length
         self.polemass_length = (self.masspole * self.length)
