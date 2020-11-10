@@ -1,7 +1,7 @@
 import os
 import pickle
 import re
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Union
 import gin
 import numpy as np
 from matplotlib import pyplot as plt
@@ -83,10 +83,13 @@ class Plotter(object):
 
 @gin.configurable
 class StatePlotter(Plotter):
+    # Plot the state theta and ratio for one evaluation in one env
     def __init__(self, env: PyEnvironment):
         super().__init__()
-        self.env_name = env.unwrapped.spec.id[:-3]
+        self._init_env(env)
 
+    def _init_env(self, env: PyEnvironment):
+        self.env_name = env.unwrapped.spec.id[:-3]
         # Depending on the env, cos(theta) or state of interest is located at different obs_idx
         if self.env_name == 'Pendulum':
             self.acos = True
@@ -101,7 +104,7 @@ class StatePlotter(Plotter):
             self.asin = False
             self.obs_idx = 0
         else:
-            raise Exception('--- Error: Wrong env in StatePlotter ---')
+            raise Exception(f'--- Error: Wrong env in {self} ---')
 
     def __call__(self, trajectories: List[Trajectory], num_episodes: int = 1) -> None:
         super()._helper(trajectories, num_episodes)
@@ -134,10 +137,23 @@ class StatePlotter(Plotter):
 
 @gin.configurable
 class ControlMetricsPlotter(Plotter):
-    def __init__(self, env: PyEnvironment):
+    # Plot the impulse response of all environments, with respective controllers
+    def __init__(self, envs: List[PyEnvironment]):
         super().__init__()
-        self.env_name = env.unwrapped.spec.id[:-3]
+        self.envs = envs
+        self.graphs_num = len(envs)
 
+        # initialise some dicts used to easy plotting
+        self.color_dict, self.label_dict = RegexDict(), RegexDict()
+        colors = ['mediumblue', 'dodgerblue', 'firebrick', 'orange', 'green']
+        labels = ['DDPG_baseline', 'DDPG_hybrid', 'PILCO_baseline', 'PILCO_hybrid', 'linear_ctrl']
+        controller_regex = ['.*ddpg_baseline.*', '.*ddpg_hybrid.*', '.*pilco_baseline.*', '.*pilco_hybrid.*']
+        for i in range(len(controller_regex)):
+            self.color_dict[controller_regex[i]] = colors[i]
+            self.label_dict[controller_regex[i]] = labels[i]
+
+    def _init_env(self, env: PyEnvironment):
+        self.env_name = env.unwrapped.spec.id[:-3]
         # Depending on the env, sin(theta) or state of interest is located at different obs_idx
         if self.env_name == 'Pendulum':
             self.asin = True
@@ -152,34 +168,47 @@ class ControlMetricsPlotter(Plotter):
             self.acos = False
             self.obs_idx = 0
         else:
-            raise Exception('--- Error: Wrong env in ControlMetricsPlotter ---')
+            raise Exception(f'--- Error: Wrong env in {self} ---')
 
-    def __call__(self, trajectories: List[List[Trajectory]], num_episodes: int = 1) -> None:
-        fig, ax = plt.subplots(figsize=(6, 4))
-        lns, labs = [], []
-        colors = ['mediumblue', 'dodgerblue', 'firebrick', 'orange', 'green']
-        labels = ['DDPG_baseline', 'DDPG_hybrid', 'PILCO_baseline', 'PILCO_hybrid', 'linear_ctrl']
-        j = 0
+    def __call__(self, all_trajectories: dict, num_episodes: int = 1) -> None:
+        '''
+        Input:
+            all_trajectories: a dict of dict of trajectories for all envs
+            num_episodes: number of evaluative episodes
+        Output:
+            control theory metrics
+        '''
+        fig, axs = plt.subplots(1, self.graphs_num, figsize=(self.graphs_num * 4, 4))
 
-        for trajectory in trajectories:
-            super()._helper(trajectory, num_episodes)
-            thetas = self.traj2theta(obs_idx=self.obs_idx, asin=self.asin)
+        for i in range(self.graphs_num):
+            env = self.envs[i]
+            self._init_env(env)
 
-            # Plot theta
-            ln = ax.plot(np.arange(self.timesteps), thetas, color=colors[j], label=labels[j])
-            lns = lns + ln
-            j += 1
+            cur_axis = axs[i]
+            lns, labs = [], []
 
-        ax.set_xlabel('Timesteps')
-        ax.set_ylabel(f'\u03B8 (\u00B0)')
+            for controller in all_trajectories[self.env_name]:
+                # all_trajectories[self.env_name] contains all the trajectories for the env
+                trajectory = all_trajectories[self.env_name][controller]
+                super()._helper(trajectory, num_episodes)
+                thetas = self.traj2theta(obs_idx=self.obs_idx, asin=self.asin)
 
-        # Set legend and format
-        labs = [l.get_label() for l in lns]
-        ax.legend(lns, labs)
-        ax.set_title(f'{self.env_name}')
+                # Plot theta
+                ln = cur_axis.plot(np.arange(self.timesteps), thetas, color=self.color_dict[controller],
+                                   label=self.label_dict[controller])
+                lns = lns + ln
+
+            # Set legend and format
+            cur_axis.set_xlabel('Timesteps')
+            if i == 0:
+                cur_axis.set_ylabel(f'\u03B8 (\u00B0)')
+            labs = [l.get_label() for l in lns]
+            cur_axis.legend(lns, labs)
+            cur_axis.set_title(f'{self.env_name}')
+
         fig.show()
 
-    def obs2metrics(self, target: List[float], stability_bound: float) -> Tuple[float, int, int]:
+    def _obtain_metrics(self, target: List[float], stability_bound: float) -> Tuple[float, int, int]:
         """
         Input:
             trajectories: trajectories from eval
@@ -218,7 +247,7 @@ class RobustnessPlotter(Plotter):
             self.acos = False
             self.obs_idx = 0
         else:
-            raise Exception('--- Error: Wrong env in ControlMetricsPlotter ---')
+            raise Exception(f'--- Error: Wrong env in {self} ---')
 
     def __call__(self,
                  dict_of_dict_controller_name_scaling_trajectory: Dict[str, Dict[float, List[Trajectory]]]) -> None:
@@ -227,7 +256,8 @@ class RobustnessPlotter(Plotter):
         colors = ['mediumblue', 'dodgerblue', 'firebrick', 'orange', 'green']
         labels = ['DDPG_baseline', 'DDPG_hybrid', 'PILCO_baseline', 'PILCO_hybrid', 'linear_ctrl']
 
-        for i, (controller_name, dict_scaling_trajectory) in enumerate(dict_of_dict_controller_name_scaling_trajectory.items()):
+        for i, (controller_name, dict_scaling_trajectory) in enumerate(
+                dict_of_dict_controller_name_scaling_trajectory.items()):
             scale, overshoot, rise, settle = [], [], [], []
             for scaling, trajectory in dict_scaling_trajectory.items():
                 self._helper(trajectory)
@@ -277,6 +307,7 @@ class LearningCurvePlotter(object):
         self.pickle_path = pickle_path
         if self.pickle_path:
             self.load_pickle()
+        self.graphs_num = 3
 
     def load_pickle(self):
         # load pickle into memory
@@ -319,22 +350,39 @@ class LearningCurvePlotter(object):
         titles = ['Pendulum', 'Cartpole', 'Mountaincar']
         regex = [r'controllers/pendulum/.*', r'controllers/cartpole/.*', r'controllers/mountaincar/.*']
         colors = ['mediumblue', 'dodgerblue', 'firebrick', 'orange', 'green']
-        total_graphs = 3
 
-        fig, axs = plt.subplots(1, total_graphs, figsize=(15, 5))  # , constrained_layout=True)
-        for i in range(total_graphs):
+        fig, axs = plt.subplots(1, self.graphs_num, figsize=(self.graphs_num * 4, 4))
+
+        for i in range(self.graphs_num):
             cur_axis = axs[i]
             j = 0
+
+            # Plot learning curve for the current env
             for line in lines:
                 if re.match(regex[i], line):
                     cur_axis.plot(xs[line], averages[line], color=colors[j], label=line)
                     cur_axis.fill_between(xs[line], worst[line], best[line], alpha=0.5, facecolor=colors[j])
                     j += 1
 
+            # Set legend and format
             cur_axis.set_ylim(0.0, 1.0)
+            cur_axis.set_xscale('log')
             cur_axis.set_xlabel('Interaction time (s)')
-            cur_axis.set_ylabel('Standardised rewards \u00B1 ')
+            if i == 0:
+                cur_axis.set_ylabel('Standardised rewards \u00B1 ')
             cur_axis.legend()
             cur_axis.set_title(titles[i])
 
         plt.show()
+
+
+class RegexDict(dict):
+
+    def __init__(self):
+        super().__init__()
+
+    def __getitem__(self, item):
+        for k, v in self.items():
+            if re.match(k, item):
+                return v
+        raise KeyError
