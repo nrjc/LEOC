@@ -26,7 +26,7 @@ class ContinuousMountainCarEnv(MountainCarEnv):
         'video.frames_per_second': 50
     }
 
-    def __init__(self, top=False, scaling_ratio=1.0):
+    def __init__(self, init_position=None, scaling_ratio=1.0):
         self.min_position = -3.6 - np.pi / 2
         self.max_position = 2.2 - np.pi / 2
         self.x_offset = 0.0
@@ -36,7 +36,7 @@ class ContinuousMountainCarEnv(MountainCarEnv):
         self.starting_position = (-np.pi - self.x_offset) / self.x_scale
         self.goal_position = (0.0 - self.x_offset) / self.x_scale
         self.goal_velocity = 0.0
-        self.top = top
+        self.init_position = init_position
         self.gravity = 9.8 * scaling_ratio
         self.masscart = 0.1 * scaling_ratio
         self.force_max = 3.0
@@ -69,11 +69,8 @@ class ContinuousMountainCarEnv(MountainCarEnv):
         self.target = np.array([self.goal_position, self.goal_velocity])
 
     def step(self, action):
-        err_msg = "%r (%s) invalid" % (action, type(action))
-        assert self.action_space.contains(action), err_msg
-
         position, velocity = self.state
-        force = action[0]
+        force = np.clip(action, -self.force_max, self.force_max)[0]
 
         acceleration = force / self.masscart - self.gravity * self._gradient(position) # force taken to be horizontal
         velocity += self.tau * acceleration
@@ -94,8 +91,8 @@ class ContinuousMountainCarEnv(MountainCarEnv):
         return self._get_obs(), reward, done, {}
 
     def reset(self):
-        if self.top:
-            self.state = np.array([-np.pi * (2 / 180) / self.x_scale, 0.0])
+        if self.init_position is not None:
+            self.state = np.array([-np.pi / 180 * self.init_position / self.x_scale, 0.0])
         else:
             self.state = np.array([self.starting_position, 0])
             high = np.array([np.pi / 180 * 10 / self.x_scale, 0.1])

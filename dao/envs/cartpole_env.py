@@ -60,7 +60,7 @@ class CartPoleEnv(gym.Env):
         'video.frames_per_second': 50
     }
 
-    def __init__(self, top=False, scaling_ratio = 1.0):
+    def __init__(self, init_position=None, scaling_ratio=1.0):
         self.gravity = 9.8
         self.masscart = 0.05 * scaling_ratio
         self.masspole = 0.005 * 1./scaling_ratio
@@ -70,7 +70,7 @@ class CartPoleEnv(gym.Env):
         self.force_max = 2.5
         self.tau = 0.02  # seconds between state updates
         self.kinematics_integrator = 'euler'
-        self.top = top
+        self.init_position = init_position
         # Angle at which to fail the episode
         self.theta_threshold_radians = 12 * 2 * math.pi / 360
         self.x_threshold = 2.4
@@ -108,11 +108,8 @@ class CartPoleEnv(gym.Env):
         return [seed]
 
     def step(self, action):
-        err_msg = "%r (%s) invalid" % (action, type(action))
-        assert self.action_space.contains(action), err_msg
-
         x, x_dot, theta, theta_dot = self.state
-        force = action[0]
+        force = np.clip(action, -self.force_max, self.force_max)[0]
         costheta = math.cos(theta)
         sintheta = math.sin(theta)
 
@@ -148,8 +145,8 @@ class CartPoleEnv(gym.Env):
         return self._get_obs(), reward, done, {}
 
     def reset(self):
-        if self.top:
-            self.state = np.array([0.0, 0.0, -np.pi / 180 * 2, 0.0])
+        if self.init_position is not None:
+            self.state = np.array([0.0, 0.0, -np.pi / 180 * self.init_position, 0.0])
         else:
             self.state = [0.0, 0.0, np.pi, 0.0]
             high = np.array([0.1, 0.1, np.pi / 180 * 10, 0.1])

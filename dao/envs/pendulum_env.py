@@ -7,11 +7,11 @@ float_type = np.float64
 
 
 class SwingUpEnv(PendulumEnv):
-    def __init__(self, top=False, name=None, scaling_ratio=1.0):
+    def __init__(self, init_position=None, name=None, scaling_ratio=1.0):
         super().__init__()
         self.m *= scaling_ratio
         self.l *= scaling_ratio
-        self.up = top
+        self.init_position = init_position
         self.target = np.array([1.0, 0.0, 0.0])
         self.tau = self.dt
         self.name = name
@@ -29,8 +29,8 @@ class SwingUpEnv(PendulumEnv):
         )
 
     def reset(self):
-        if self.up:
-            self.state = np.array([-np.pi / 180 * 2, 0.0])
+        if self.init_position is not None:
+            self.state = np.array([-np.pi / 180 * self.init_position, 0.0])
         else:
             self.state = np.array([np.pi, 0.0])
             high = np.array([np.pi / 180 * 10, 0.1])
