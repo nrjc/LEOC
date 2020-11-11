@@ -87,7 +87,7 @@ class ContinuousMountainCarEnv(MountainCarEnv):
             or position > self.max_position
         )
 
-        reward = - 0.1 * (5 * (position ** 2) + (velocity ** 2) + .05 * (force ** 2))
+        reward = - 0.1 * (5 * (position ** 2) + (velocity ** 2) + .005 * (force ** 2))
         if done:
             reward -= 100.0
 
@@ -95,7 +95,7 @@ class ContinuousMountainCarEnv(MountainCarEnv):
 
     def reset(self):
         if self.top:
-            self.state = np.array([-np.pi * (1 / 180) / self.x_scale, 0.0])
+            self.state = np.array([-np.pi * (2 / 180) / self.x_scale, 0.0])
         else:
             self.state = np.array([self.starting_position, 0])
             high = np.array([np.pi / 180 * 10 / self.x_scale, 0.1])

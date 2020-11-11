@@ -141,7 +141,7 @@ class CartPoleEnv(gym.Env):
             or x > self.x_threshold
         )
 
-        reward = - 0.1 * (5 * (angle_normalize(theta) ** 2) + (x ** 2) + .05 * (force ** 2))
+        reward = - 0.1 * (5 * (angle_normalize(theta) ** 2) + (x ** 2) + .005 * (force ** 2))
         if done:
             reward -= 100
 
@@ -149,7 +149,7 @@ class CartPoleEnv(gym.Env):
 
     def reset(self):
         if self.top:
-            self.state = np.array([0.0, 0.0, -np.pi / 180 * 1, 0.0])
+            self.state = np.array([0.0, 0.0, -np.pi / 180 * 2, 0.0])
         else:
             self.state = [0.0, 0.0, np.pi, 0.0]
             high = np.array([0.1, 0.1, np.pi / 180 * 10, 0.1])
