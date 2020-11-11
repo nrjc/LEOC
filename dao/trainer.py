@@ -16,7 +16,7 @@ from tf_agents.utils import common
 
 from DDPG.ddpg import DDPG, ReplayBuffer
 from dao.envloader import TFPy2Gym
-from dao.metrics import CompleteTrajectoryObservation
+from dao.metrics import CompleteTrajectoryObservation, myDynamicEpisodeDriver
 from plotting.plotter import Plotter
 
 from pilco.models import PILCO
@@ -55,6 +55,7 @@ class Evaluator:
 
     def save_policy(self):
         self.saver.save(self.model_path)
+        print(f'Policy saved at {self.model_path}')
 
     def update_pickle(self):
         # load pickle into memory
@@ -78,7 +79,8 @@ class Evaluator:
 
         print(f'Pickle file updated with {self.model_path} data')
 
-    def __call__(self, training_timesteps: int, save_model: bool = False) -> List[Trajectory]:
+    def __call__(self, training_timesteps: int, save_model: bool = False,
+                 impulse_input: float = 0.0, step_input: float = 0.0) -> List[Trajectory]:
         """
         Invoked after each eval_interval during training phase.
         Each __call__ does 4 things:
@@ -92,21 +94,22 @@ class Evaluator:
         avg_reward = tf_metrics.AverageReturnMetric()
         trajectories = CompleteTrajectoryObservation()
         observers = [num_episodes, env_steps, avg_reward, trajectories]
-        driver = dynamic_episode_driver.DynamicEpisodeDriver(
-            self.env,
-            self.policy,
-            observers,
+        driver = myDynamicEpisodeDriver(
+            env=self.env,
+            policy=self.policy,
+            impulse_input=impulse_input,
+            step_input=step_input,
+            observers=observers,
             num_episodes=self.eval_num_episodes)
         final_time_step, _ = driver.run(policy_state=())
 
         eval_reward = avg_reward.result()
-        print(f'Evaluator eval_reward = {eval_reward}, on average of {self.eval_num_episodes} episodes.')
+        print(f'Evaluator eval_reward = {eval_reward}, on average of {self.eval_num_episodes} episodes. Controller at {self.model_path}')
 
         # save model
         if save_model and eval_reward > self.best_reward:
             self.best_reward = eval_reward
             self.save_policy()
-            print(f'Policy saved at {self.model_path}')
 
         # plot graph
         if self.plotter is not None:
