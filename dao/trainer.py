@@ -1,4 +1,7 @@
 import os
+import re
+from os import listdir
+from os.path import isfile, join
 import pickle
 import gin
 import numpy as np
@@ -17,7 +20,7 @@ from tf_agents.utils import common
 from DDPG.ddpg import DDPG, ReplayBuffer
 from dao.envloader import TFPy2Gym
 from dao.metrics import CompleteTrajectoryObservation, myDynamicEpisodeDriver
-from plotting.plotter import Plotter
+from plotting.plotter import Plotter, AwardCurve
 
 from pilco.models import PILCO
 from pilco.rewards import ExponentialReward
@@ -36,7 +39,7 @@ class Trainer:
 @gin.configurable
 class Evaluator:
     def __init__(self, eval_env: TFPyEnvironment, policy: TFPolicy, plotter: Plotter = None,
-                 model_path: str = None, eval_num_episodes: int = 1):
+                 model_path: str = None, pickle_dir: str = None, eval_num_episodes: int = 1):
         self.env = eval_env
         self.policy = policy
         self.model_path = model_path
@@ -45,10 +48,13 @@ class Evaluator:
             self.saver = policy_saver.PolicySaver(self.policy, batch_size=None)
         self.eval_num_episodes = eval_num_episodes
         self.plotter = plotter
-        self.pickle_path = 'results.pickle'
+        self.pickle_dir = pickle_dir
+        self.pickle_idx = 0
         self.eval_results = []
         self.eval_times = []
         self.tau = TFPy2Gym(self.env).tau
+        if self.pickle_dir is not None:
+            self._get_pickle_idx()
 
     def load_policy(self):
         self.policy = tf.compat.v2.saved_model.load(self.model_path)
@@ -57,27 +63,34 @@ class Evaluator:
         self.saver.save(self.model_path)
         print(f'Policy saved at {self.model_path}')
 
-    def update_pickle(self):
-        # load pickle into memory
-        if os.path.isfile(self.pickle_path) and os.access(self.pickle_path, os.R_OK):
-            # checks if file exists
-            with open(self.pickle_path, 'rb') as f:
-                eval_results_db = pickle.load(f)
+    def _get_pickle_idx(self):
+        def extract_number(f):
+            s = re.findall('(\d+).pickle', f)
+            idx = int(s[0]) if s else -1
+            return idx
+
+        # check pickle directory exists
+        if not os.path.exists(self.pickle_dir):
+            os.makedirs(self.pickle_dir)
         else:
-            eval_results_db = {}
+            # find the appropriate index/name for the pickle file
+            pickle_files = [f for f in listdir(self.pickle_dir) if isfile(join(self.pickle_dir, f))]
+            self.pickle_idx = max([extract_number(f) for f in pickle_files]) + 1
 
-        # update the pickled db object with new eval_results
-        xy = (self.eval_times, self.eval_results)
-        if self.model_path in eval_results_db:
-            eval_results_db[self.model_path].append(xy)
-        else:
-            eval_results_db[self.model_path] = [xy]
+    def _get_pickle_path(self):
+        filename = str(self.pickle_idx) + '.pickle'
+        return os.path.join(self.pickle_dir, filename)
 
-        # save pickle file
-        with open(self.pickle_path, 'wb') as f:
-            pickle.dump(eval_results_db, f)
+    def save_pickle(self):
+        # save xy as pickle file
+        xy = np.array([self.eval_times, self.eval_results])
+        xy = AwardCurve(xy)
+        pickle_path = self._get_pickle_path()
+        with open(pickle_path, 'wb') as f:
+            pickle.dump(xy, f)
 
-        print(f'Pickle file updated with {self.model_path} data')
+        self.pickle_idx += 1
+        print(f'{self.model_path} data saved to {pickle_path}')
 
     def __call__(self, training_timesteps: int, save_model: bool = False,
                  impulse_input: float = 0.0, step_input: float = 0.0) -> List[Trajectory]:
@@ -158,7 +171,7 @@ class DDPGTrainer(Trainer):
                 self.evaluator(training_timesteps=iteration, save_model=save_model)
 
         # Update pickle file containing eval_results
-        self.evaluator.update_pickle()
+        self.evaluator.save_pickle()
 
         print(f'--- Finished training for {self.num_iterations} iterations ---')
         return self.ddpg
@@ -224,7 +237,7 @@ class PILCOTrainer(Trainer):
                 self.evaluator(training_timesteps=training_timesteps, save_model=save_model)
 
         # Update pickle file containing eval_results
-        self.evaluator.update_pickle()
+        self.evaluator.save_pickle()
 
         print(f'--- Finished training for {self.num_rollouts} rollouts ---')
         return self.policy

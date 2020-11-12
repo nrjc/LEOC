@@ -294,84 +294,51 @@ class LearningCurvePlotter(object):
     """
     This class plots learning curves for the entire training session from
     a list of np.arrays
-
-    Input:
-        rewards: a dictionary of the rewards
-        The content of the dictionary should be structured as such:
-        dict['controller/env/model'] = [([interaction time for x-axis ... ], [eval rewards for y-axis ... ]) ... ]
-        The dictionary can be loaded from a pickle file using the load_pickle function
     """
 
-    def __init__(self, rewards: dict = None, pickle_path: str = None):
-        self.rewards = rewards
-        self.pickle_path = pickle_path
-        if self.pickle_path:
-            self.load_pickle()
-        self.graphs_num = 3
+    def __init__(self):
+        pass
 
-    def load_pickle(self):
-        # load pickle into memory
-        if os.path.isfile(self.pickle_path) and os.access(self.pickle_path, os.R_OK):
-            # checks if file exists
-            with open(self.pickle_path, 'rb') as f:
-                self.rewards = pickle.load(f)
-        else:
-            raise Exception('--- Error: No pickle file found! ---')
-
-    def __call__(self) -> None:
-        # Partition the data into lines, each line representing a controller
-        lines = self.rewards.keys()
-        all = {}
-        averages = {}
-        best = {}
-        worst = {}
-        xs = {}
-
-        for key in self.rewards:
-            # Put the data for each line into an ndarray. Put this ndarray into dict all.
-            xs[key] = np.array(self.rewards[key][0][0])
-            all[key] = np.array(self.rewards[key][0][1])
-            if len(self.rewards[key]) == 1:
-                all[key] = np.expand_dims(all[key], axis=0)
-            for i in range(1, len(self.rewards[key])):
-                all[key] = np.vstack((all[key], self.rewards[key][i][1]))
-
-            # Compute average, best, worst
-            best_reward, worst_reward = np.max(all[key]), np.min(all[key])
-            averages[key] = np.mean(all[key], axis=0)
-            best[key] = np.max(all[key], axis=0)
-            worst[key] = np.min(all[key], axis=0)
-            # Standardisation
-            averages[key] = (averages[key] - best_reward) / (best_reward - worst_reward) + 1.0
-            best[key] = (best[key] - best_reward) / (best_reward - worst_reward) + 1.0
-            worst[key] = (worst[key] - best_reward) / (best_reward - worst_reward) + 1.0
+    def __call__(self, all_curves: dict) -> None:
+        '''
+        Input:
+            all_curves: a dict of dict of all the rewards
+            The content of the dictionary should be structured as such:
+            dict[env_name][policy] = AwardCurves object for the env and policy
+        '''
+        self.envs_names = all_curves.keys()
+        self.graphs_num = len(self.envs_names)
 
         # Plot graph
-        titles = ['Pendulum', 'Cartpole', 'Mountaincar']
-        regex = [r'controllers/pendulum/.*', r'controllers/cartpole/.*', r'controllers/mountaincar/.*']
-        colors = ['mediumblue', 'dodgerblue', 'firebrick', 'orange', 'green']
-
         fig, axs = plt.subplots(1, self.graphs_num, figsize=(self.graphs_num * 4, 4))
+        colors = {'ddpg_baseline': 'mediumblue', 'ddpg_hybrid': 'dodgerblue',
+                  'pilco_baseline': 'firebrick', 'pilco_hybrid': 'orange'}
 
-        for i in range(self.graphs_num):
+        i = 0
+        for env_name in self.envs_names:
             cur_axis = axs[i]
-            j = 0
-
-            # Plot learning curve for the current env
-            for line in lines:
-                if re.match(regex[i], line):
-                    cur_axis.plot(xs[line], averages[line], color=colors[j], label=line)
-                    cur_axis.fill_between(xs[line], worst[line], best[line], alpha=0.5, facecolor=colors[j])
-                    j += 1
+            for policy_name in all_curves[env_name].keys():
+                curve = all_curves[env_name][policy_name]
+                xs = curve.x
+                curve.normalise()
+                mean = curve.mean()
+                std = curve.std()
+                color = colors[policy_name]
+                best = curve.best()
+                worst = curve.worst()
+                # Plot learning curve for the current env and policy
+                cur_axis.plot(xs, mean, color=color, label=policy_name)
+                cur_axis.fill_between(xs, mean-std, mean+std, alpha=0.5, facecolor=color, label=policy_name+' \u00B1 sd')
 
             # Set legend and format
             cur_axis.set_ylim(0.0, 1.0)
             cur_axis.set_xscale('log')
             cur_axis.set_xlabel('Interaction time (s)')
             if i == 0:
-                cur_axis.set_ylabel('Standardised rewards \u00B1 ')
+                cur_axis.set_ylabel('Normalised rewards')
             cur_axis.legend()
-            cur_axis.set_title(titles[i])
+            cur_axis.set_title(env_name)
+            i += 1
 
         plt.show()
 
@@ -386,3 +353,37 @@ class RegexDict(dict):
             if re.match(k, item):
                 return v
         raise KeyError
+
+
+class AwardCurve(object):
+    def __init__(self, data: np.ndarray):
+        self.x = data[0]
+        self.y = data[1:]
+
+    def append(self, other):
+        # Append other to self
+        assert len(self.x) == len(other.x), '--- Error: Different timesteps ---'
+        self.y = np.vstack((self.y, other.y))
+
+    def _check_dim(self):
+        if self.y.ndim == 1:
+            self.y = np.expand_dims(self.y, axis=0)
+
+    def mean(self):
+        self._check_dim()
+        return np.mean(self.y, axis=0)
+
+    def best(self):
+        self._check_dim()
+        return np.max(self.y, axis=0)
+
+    def worst(self):
+        self._check_dim()
+        return np.min(self.y, axis=0)
+
+    def std(self):
+        self._check_dim()
+        return np.std(self.y, axis=0)
+
+    def normalise(self):
+        self.y = (self.y - np.min(self.y)) / (np.max(self.y) - np.min(self.y))
