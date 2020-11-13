@@ -309,35 +309,43 @@ class LearningCurvePlotter(object):
         self.envs_names = all_curves.keys()
         self.graphs_num = len(self.envs_names)
 
-        # Plot graph
-        fig, axs = plt.subplots(1, self.graphs_num, figsize=(self.graphs_num * 4, 4))
         colors = {'ddpg_baseline': 'mediumblue', 'ddpg_hybrid': 'dodgerblue',
                   'pilco_baseline': 'firebrick', 'pilco_hybrid': 'orange'}
+        policies = [['ddpg_baseline', 'ddpg_hybrid'], ['pilco_baseline', 'pilco_hybrid']]
+        rows = len(policies)
+
+        # Plot graph
+        fig, axs = plt.subplots(rows, self.graphs_num, figsize=(self.graphs_num * 4, 5))
 
         i = 0
         for env_name in self.envs_names:
-            cur_axis = axs[i]
-            for policy_name in all_curves[env_name].keys():
-                curve = all_curves[env_name][policy_name]
-                xs = curve.x
-                curve.normalise()
-                mean = curve.mean()
-                std = curve.std()
-                color = colors[policy_name]
-                best = curve.best()
-                worst = curve.worst()
-                # Plot learning curve for the current env and policy
-                cur_axis.plot(xs, mean, color=color, label=policy_name)
-                cur_axis.fill_between(xs, mean-std, mean+std, alpha=0.5, facecolor=color, label=policy_name+' \u00B1 sd')
+            for j in range(rows):
+                cur_axis = axs[j][i]
+                for policy_name in policies[j]:  # all_curves[env_name].keys():
+                    if policy_name not in all_curves[env_name]:
+                        break
+                    curve = all_curves[env_name][policy_name]
+                    xs = curve.x
+                    curve.normalise()
+                    mean = curve.mean()
+                    std = curve.std()
+                    color = colors[policy_name]
+                    best = curve.best()
+                    worst = curve.worst()
+                    # Plot learning curve for the current env and policy
+                    cur_axis.plot(xs, mean, color=color, label=policy_name)
+                    cur_axis.fill_between(xs, mean - std, mean + std, alpha=0.5, facecolor=color,
+                                          label=policy_name + ' \u00B1 sd')
 
-            # Set legend and format
-            cur_axis.set_ylim(0.0, 1.0)
-            cur_axis.set_xscale('log')
-            cur_axis.set_xlabel('Interaction time (s)')
-            if i == 0:
-                cur_axis.set_ylabel('Normalised rewards')
-            cur_axis.legend()
-            cur_axis.set_title(env_name)
+                # Set legend and format
+                cur_axis.set_ylim(0.0, 1.0)
+                # cur_axis.set_xscale('log')
+                cur_axis.set_xlabel('Interaction time (s)')
+                if i == 0:
+                    cur_axis.set_ylabel('Normalised rewards')
+                cur_axis.legend()
+                if j == 0:
+                    cur_axis.set_title(env_name)
             i += 1
 
         plt.show()
