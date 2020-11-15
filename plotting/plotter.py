@@ -23,7 +23,17 @@ class Plotter(object):
         self.rewards = []
         self.actions = []
         self.ratio = []
+        self.theta = []
         self.timesteps = 0
+
+        # initialise some dicts used to easy plotting
+        self.color_dict, self.label_dict = RegexDict(), RegexDict()
+        colors = ['mediumblue', 'dodgerblue', 'firebrick', 'orange', 'green']
+        labels = ['DDPG_baseline', 'DDPG_hybrid', 'PILCO_baseline', 'PILCO_hybrid', 'linear']
+        controller_regex = ['.*ddpg_baseline.*', '.*ddpg_hybrid.*', '.*pilco_baseline.*', '.*pilco_hybrid.*', '.*linear.*']
+        for i in range(len(controller_regex)):
+            self.color_dict[controller_regex[i]] = colors[i]
+            self.label_dict[controller_regex[i]] = labels[i]
 
     def __call__(self, trajectories: List[Trajectory], **kwargs) -> None:
         raise NotImplementedError
@@ -60,10 +70,12 @@ class Plotter(object):
 
         assert not (acos and asin), '--- Error: Both acos and asin are True! ---'
         if asin:
-            theta = tf.math.asin(theta)
+            theta = np.arcsin(theta)
+            theta = theta / np.pi * 180
         elif acos:
-            theta = tf.math.acos(theta)
-        theta = theta / np.pi * 180
+            theta = np.arccos(theta)
+            theta = theta / np.pi * 180
+        self.theta = theta
         return theta
 
     def traj2info(self) -> np.ndarray:
@@ -79,6 +91,79 @@ class Plotter(object):
             ratios = self.ratio
         ratios = np.array(ratios[:self.timesteps])
         return ratios
+
+    def _ss(self, ss=0.0):
+        sample1 = self.theta[-5:]
+        sample2 = self.theta[-6:-1]
+        ss_reached = np.allclose(sample1, sample2, rtol=0, atol=1e-03)
+        return ss_reached, self.theta[-1] - ss
+
+    def _overshoot(self, ss_reached: bool) -> float:
+        # overshoot only applicable if ss reached
+        if ss_reached:
+            # assume observations start at 0
+            overshoot = max(np.max(self.theta), 0.0)
+            if not np.isclose(overshoot, self.theta[-1], rtol=0, atol=1e-03):
+                return overshoot - self.theta[-1]
+            else:
+                return 0.0
+        else:
+            return None
+
+    def _undershoot(self, ss_reached: bool) -> float:
+        # undershoot only applicable if ss reached
+        if ss_reached:
+            # assume observations start at 0
+            undershoot = min(np.min(self.theta), 0.0)
+            if not np.isclose(undershoot, self.theta[-1], rtol=0, atol=1e-03):
+                return self.theta[-1] - undershoot
+            else:
+                return 0.0
+        else:
+            return None
+
+    def _rise_time(self, percentage=0.9):
+        ss_reached, ss_error = self._ss()
+        if ss_reached and ss_error != 0.0:
+            if ss_error > 0:
+                return np.argmax(self.theta > percentage * ss_error)
+            else:
+                return np.argmax(self.theta < percentage * ss_error)
+        else:
+            return None
+
+    def _overshoot_peak_time(self, ss_reached: bool):
+        if self._overshoot(ss_reached) is None or self._overshoot(ss_reached) == 0.0:
+            return None
+        else:
+            return self.theta.index(max(self.theta))
+
+    def _undershoot_peak_time(self, ss_reached: bool):
+        if self._overshoot(ss_reached) is None or self._undershoot(ss_reached) == 0.0:
+            return None
+        else:
+            return self.theta.index(min(self.theta))
+
+    def _settle_time(self, ss_target, percentage=0.1) -> int:
+        theta_reverse = self.theta[::-1]
+        if np.isclose(ss_target, 0.0, rtol=0, atol=1e-03):
+            return None
+        elif ss_target > 0:
+            upper_stability_bound, lower_stability_bound = ss_target * percentage, ss_target * (1.0 - percentage)
+        else:
+            upper_stability_bound, lower_stability_bound = ss_target * (1.0 - percentage), ss_target * percentage
+
+        settling_time = np.argmax(lower_stability_bound < theta_reverse < upper_stability_bound)
+        settling_time = self.timesteps - settling_time
+        return settling_time
+
+    def _obtain_metrics(self):
+        """
+        Output:
+            np.ndarray of the control theory metrics
+        """
+        # TODO: test and debug the other control metrics
+        return self._ss()
 
 
 @gin.configurable
@@ -137,23 +222,14 @@ class StatePlotter(Plotter):
 
 @gin.configurable
 class ControlMetricsPlotter(Plotter):
-    # Plot the impulse response of all environments, with respective controllers
-    def __init__(self, envs: List[PyEnvironment]):
+    # Plot the impulse and step response of all environments, with respective controllers
+    def __init__(self, envs_names: List[str]):
         super().__init__()
-        self.envs = envs
-        self.graphs_num = len(envs)
+        self.envs_names = envs_names
+        self.graphs_num = len(envs_names)
 
-        # initialise some dicts used to easy plotting
-        self.color_dict, self.label_dict = RegexDict(), RegexDict()
-        colors = ['mediumblue', 'dodgerblue', 'firebrick', 'orange', 'green']
-        labels = ['DDPG_baseline', 'DDPG_hybrid', 'PILCO_baseline', 'PILCO_hybrid', 'linear_ctrl']
-        controller_regex = ['.*ddpg_baseline.*', '.*ddpg_hybrid.*', '.*pilco_baseline.*', '.*pilco_hybrid.*']
-        for i in range(len(controller_regex)):
-            self.color_dict[controller_regex[i]] = colors[i]
-            self.label_dict[controller_regex[i]] = labels[i]
-
-    def _init_env(self, env: PyEnvironment):
-        self.env_name = env.unwrapped.spec.id[:-3]
+    def _init_env(self, env_name: str):
+        self.env_name = env_name
         # Depending on the env, sin(theta) or state of interest is located at different obs_idx
         if self.env_name == 'Pendulum':
             self.asin = True
@@ -170,61 +246,55 @@ class ControlMetricsPlotter(Plotter):
         else:
             raise Exception(f'--- Error: Wrong env in {self} ---')
 
-    def __call__(self, all_trajectories: dict, num_episodes: int = 1) -> None:
+    def __call__(self, all_trajectories_list: List[dict], num_episodes: int = 1) -> None:
         '''
         Input:
-            all_trajectories: a dict of dict of trajectories for all envs
+            all_trajectories_list: a list of dict of trajectories for all envs
             num_episodes: number of evaluative episodes
         Output:
             control theory metrics
         '''
-        fig, axs = plt.subplots(1, self.graphs_num, figsize=(self.graphs_num * 4, 4))
+        fig, axs = plt.subplots(len(all_trajectories_list), self.graphs_num, figsize=(self.graphs_num * 4, 5))
 
-        for i in range(self.graphs_num):
-            env = self.envs[i]
-            self._init_env(env)
+        for j, all_trajectories in enumerate(all_trajectories_list):
+            for i, env_name in enumerate(self.envs_names):
+                self._init_env(env_name)
 
-            cur_axis = axs[i]
-            lns, labs = [], []
+                cur_axis = axs[j][i]
+                lns, labs = [], []
 
-            for controller in all_trajectories[self.env_name]:
-                # all_trajectories[self.env_name] contains all the trajectories for the env
-                trajectory = all_trajectories[self.env_name][controller]
-                super()._helper(trajectory, num_episodes)
-                thetas = self.traj2theta(obs_idx=self.obs_idx, asin=self.asin)
+                for controller in all_trajectories[self.env_name]:
+                    # all_trajectories[self.env_name] contains all the trajectories for the env
+                    trajectories = all_trajectories[self.env_name][controller]
+                    for trajectory in trajectories:
+                        super()._helper(trajectory, num_episodes)
+                        thetas = self.traj2theta(obs_idx=self.obs_idx, asin=self.asin)
 
-                # Plot theta
-                ln = cur_axis.plot(np.arange(self.timesteps), thetas, color=self.color_dict[controller],
-                                   label=self.label_dict[controller])
-                lns = lns + ln
+                        # Plot theta
+                        ln = cur_axis.plot(np.arange(self.timesteps), thetas, color=self.color_dict[controller],
+                                           alpha=1.0, label=self.label_dict[controller])
 
-            # Set legend and format
-            cur_axis.set_xlabel('Timesteps')
-            if i == 0:
-                cur_axis.set_ylabel(f'\u03B8 (\u00B0)')
-            labs = [l.get_label() for l in lns]
-            cur_axis.legend(lns, labs)
-            cur_axis.set_title(f'{self.env_name}')
+                        metrics = self._obtain_metrics()
+                        print(f'{controller} {metrics}')
+
+                        lns = lns + ln
+
+                # Set legend and format
+                cur_axis.set_xlabel('Timesteps')
+                if i == 0 and j == 0:
+                    cur_axis.set_ylabel(f'Impulse response \u03B8 (\u00B0)')
+                elif i == 0 and j == 1:
+                    cur_axis.set_ylabel(f'Step response \u03B8 (\u00B0)')
+                # if env_name == 'Pendulum' or env_name == 'Cartpole':
+                #     cur_axis.set_ylim(-2.0, 2.0)
+                # elif env_name == 'Mountaincar':
+                #     cur_axis.set_ylim(-0.05, 0.05)
+                labs = [l.get_label() for l in lns]
+                cur_axis.legend(lns, labs)
+                if j == 0:
+                    cur_axis.set_title(f'{self.env_name}')
 
         fig.show()
-
-    def _obtain_metrics(self, target: List[float], stability_bound: float) -> Tuple[float, int, int]:
-        """
-        Input:
-            trajectories: trajectories from eval
-        Output:
-            np.ndarray of the control theory metrics
-        """
-        theta = self.traj2theta(obs_idx=self.obs_idx, asin=self.asin)
-        peak_overshot = max(abs(theta)) - target
-        rising_time = theta.index(max(theta))
-
-        theta_reverse = theta[::-1]
-        upper_stability_bound, lower_stability_bound = target + stability_bound, target - stability_bound
-        settling_time = np.argmax(lower_stability_bound < theta_reverse < upper_stability_bound)
-        settling_time = len(theta_reverse) - settling_time
-
-        return (peak_overshot, rising_time, settling_time)
 
 
 @gin.configurable
@@ -279,16 +349,6 @@ class RobustnessPlotter(Plotter):
         fig.show()
         pass
 
-    def _obtain_metrics(self, theta, target: float = 0, stability_bound: float = (np.pi * 0.1) / 180):
-        peak_overshot = max(abs(theta)) - target
-        rising_time = theta.index(max(theta))
-
-        theta_reverse = theta[::-1]
-        upper_stability_bound, lower_stability_bound = target + stability_bound, target - stability_bound
-        settling_time = np.argmax(lower_stability_bound < theta_reverse < upper_stability_bound)
-        settling_time = len(theta_reverse) - settling_time
-        return (peak_overshot, rising_time, settling_time)
-
 
 class LearningCurvePlotter(object):
     """
@@ -326,7 +386,7 @@ class LearningCurvePlotter(object):
                         break
                     curve = all_curves[env_name][policy_name]
                     xs = curve.x
-                    curve.normalise()
+                    # curve.normalise()
                     mean = curve.mean()
                     std = curve.std()
                     color = colors[policy_name]
@@ -338,7 +398,7 @@ class LearningCurvePlotter(object):
                                           label=policy_name + ' \u00B1 sd')
 
                 # Set legend and format
-                cur_axis.set_ylim(0.0, 1.0)
+                # cur_axis.set_ylim(0.0, 1.0)
                 # cur_axis.set_xscale('log')
                 cur_axis.set_xlabel('Interaction time (s)')
                 if i == 0:
@@ -371,6 +431,15 @@ class AwardCurve(object):
     def append(self, other):
         # Append other to self
         assert len(self.x) == len(other.x), '--- Error: Different timesteps ---'
+        # if len(self.x) < len(other.x):
+        #     repeats = len(other.x) - len(self.x)
+        #     repeat_columns = np.tile(self.y[:, [-1]], repeats)
+        #     self.y = np.hstack((self.y, repeat_columns))
+        #     self.x = np.hstack((self.x, other.x[-repeats:]))
+        # elif len(self.x) > len(other.x):
+        #     repeats = len(self.x) - len(other.x)
+        #     repeat_columns = np.tile(other.y[-1], repeats)
+        #     other.y = np.hstack((other.y, repeat_columns))
         self.y = np.vstack((self.y, other.y))
 
     def _check_dim(self):
