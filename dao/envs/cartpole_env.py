@@ -60,10 +60,10 @@ class CartPoleEnv(gym.Env):
         'video.frames_per_second': 50
     }
 
-    def __init__(self, init_position=None, scaling_ratio=1.0):
+    def __init__(self, init_position=None):
         self.gravity = 9.8
-        self.masscart = 0.05 * scaling_ratio
-        self.masspole = 0.005 * 1./scaling_ratio
+        self.masscart = 0.05
+        self.masspole = 0.005
         self.total_mass = (self.masspole + self.masscart)
         self.length = 0.5  # actually half the pole's length
         self.polemass_length = (self.masspole * self.length)
@@ -214,9 +214,13 @@ class CartPoleEnv(gym.Env):
         obs = np.array([x, x_dot, np.cos(theta), np.sin(theta), theta_dot]).reshape(-1)
         return np.array(obs, dtype=float_type)
 
-    def mutate_with_noise(self, noise_mag, arg_names: List[str]):
+    def mutate_with_noise(self, noise, arg_names=None, init_position=0.0):
+        self.__init__(init_position=init_position)
+        if arg_names is None:
+            # arg_names = ['masscart', 'masspole']
+            arg_names = ['gravity']
         for k in arg_names:
-            self.__dict__[k] = self.__dict__[k] * (1 + np.random.uniform(-noise_mag, noise_mag))
+            self.__dict__[k] = self.__dict__[k] * (1 + noise)
 
     def control(self):
         # M := mass of cart

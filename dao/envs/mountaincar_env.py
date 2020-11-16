@@ -26,7 +26,7 @@ class ContinuousMountainCarEnv(MountainCarEnv):
         'video.frames_per_second': 50
     }
 
-    def __init__(self, init_position=None, scaling_ratio=1.0):
+    def __init__(self, init_position=None):
         self.min_position = -3.6 - np.pi / 2
         self.max_position = 2.2 - np.pi / 2
         self.x_offset = 0.0
@@ -37,8 +37,8 @@ class ContinuousMountainCarEnv(MountainCarEnv):
         self.goal_position = (0.0 - self.x_offset) / self.x_scale
         self.goal_velocity = 0.0
         self.init_position = init_position
-        self.gravity = 9.8 * scaling_ratio
-        self.masscart = 0.1 * scaling_ratio
+        self.gravity = 9.8
+        self.masscart = 0.1
         self.force_max = 3.0
         self.tau = 0.02  # seconds between state updates
 
@@ -178,9 +178,12 @@ class ContinuousMountainCarEnv(MountainCarEnv):
         obs = np.array([position, velocity]).reshape(-1)
         return np.array(obs, dtype=float_type)
 
-    def mutate_with_noise(self, noise_mag, arg_names: List[str]):
+    def mutate_with_noise(self, noise, arg_names=None, init_position=0.0):
+        self.__init__(init_position=init_position)
+        if arg_names is None:
+            arg_names = ['gravity']  #'masscart']
         for k in arg_names:
-            self.__dict__[k] = self.__dict__[k] * (1 + np.random.uniform(-noise_mag, noise_mag))
+            self.__dict__[k] = self.__dict__[k] * (1 + noise)
 
     def control(self):
         # m := mass of car

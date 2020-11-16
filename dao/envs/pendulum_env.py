@@ -7,10 +7,8 @@ float_type = np.float64
 
 
 class SwingUpEnv(PendulumEnv):
-    def __init__(self, init_position=None, name=None, scaling_ratio=1.0):
+    def __init__(self, init_position=None, name=None):
         super().__init__()
-        self.m *= scaling_ratio
-        self.l *= scaling_ratio
         self.init_position = init_position
         self.target = np.array([1.0, 0.0, 0.0])
         self.tau = self.dt
@@ -43,9 +41,12 @@ class SwingUpEnv(PendulumEnv):
         theta, thetadot = self.state
         return np.array([np.cos(theta), np.sin(theta), thetadot], dtype=float_type)
 
-    def mutate_with_noise(self, noise_mag, arg_names: List[str]):
+    def mutate_with_noise(self, noise, arg_names=None, init_position=0.0):
+        self.__init__(init_position=init_position)
+        if arg_names is None:
+            arg_names = ['g']
         for k in arg_names:
-            self.__dict__[k] = self.__dict__[k] * (1 + np.random.uniform(-noise_mag, noise_mag))
+            self.__dict__[k] = self.__dict__[k] * (1 + noise)
 
     def control(self):
         # m := mass of pendulum

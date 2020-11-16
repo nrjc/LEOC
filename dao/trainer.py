@@ -20,7 +20,7 @@ from tf_agents.utils import common
 from DDPG.ddpg import DDPG, ReplayBuffer
 from dao.envloader import TFPy2Gym
 from dao.metrics import CompleteTrajectoryObservation, myDynamicEpisodeDriver
-from plotting.plotter import Plotter, AwardCurve
+from plotting.plotter import AwardCurve, StatePlotter
 
 from pilco.models import PILCO
 from pilco.rewards import ExponentialReward
@@ -38,7 +38,7 @@ class Trainer:
 
 @gin.configurable
 class Evaluator:
-    def __init__(self, eval_env: TFPyEnvironment, policy: TFPolicy, plotter: Plotter = None,
+    def __init__(self, eval_env: TFPyEnvironment, policy: TFPolicy, plotter: StatePlotter = None,
                  model_path: str = None, pickle_dir: str = None, eval_num_episodes: int = 1):
         self.env = eval_env
         self.policy = policy
