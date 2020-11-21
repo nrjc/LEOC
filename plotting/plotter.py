@@ -25,8 +25,8 @@ class TrajectoryPath(object):
 
         # initialise some dicts used to easy plotting
         self.color_dict, self.label_dict = RegexDict(), RegexDict()
-        colors = ['mediumblue', 'dodgerblue', 'darkorange', 'gold', 'green']
-        labels = ['DDPG_baseline', 'DDPG_hybrid', 'PILCO_baseline', 'PILCO_hybrid', 'linear/ddpg_hybrid/pilco_hybrid']
+        colors = ['dodgerblue', 'mediumblue', 'orange', 'firebrick', 'green']
+        labels = ['DDPG_baseline', 'DDPG_hybrid', 'PILCO_baseline', 'PILCO_hybrid', 'linear/DDPG_hybrid/PILCO_hybrid']
         controller_regex = ['.*ddpg_baseline.*', '.*ddpg_hybrid.*', '.*pilco_baseline.*', '.*pilco_hybrid.*',
                             '.*linear.*']
         for i in range(len(controller_regex)):
@@ -35,6 +35,24 @@ class TrajectoryPath(object):
 
     def __call__(self, trajectories: List[Trajectory], **kwargs) -> None:
         raise NotImplementedError
+
+    def _init_env(self, env_name: str):
+        self.env_name = env_name
+        # Depending on the env, sin(theta) or state of interest is located at different obs_idx
+        if self.env_name == 'Pendulum':
+            self.asin = True
+            self.acos = False
+            self.obs_idx = 1
+        elif self.env_name == 'Cartpole':
+            self.asin = True
+            self.acos = False
+            self.obs_idx = 3
+        elif self.env_name == 'Mountaincar':
+            self.asin = False
+            self.acos = False
+            self.obs_idx = 0
+        else:
+            raise Exception(f'--- Error: Wrong env in {self} ---')
 
     def _helper(self, trajectories: List[Trajectory], num_episodes: int = 1) -> None:
         self.trajectories = trajectories
@@ -154,16 +172,12 @@ class TrajectoryPath(object):
         else:
             return self.theta.index(min(self.theta))
 
-    def _settle_time(self, ss_target, percentage=0.1) -> int:
+    def _settle_time(self, ss_target, tol=0.1) -> int:
         theta_reverse = self.theta[::-1]
-        if np.isclose(ss_target, 0.0, rtol=0, atol=1e-03):
-            return None
-        elif ss_target > 0:
-            upper_stability_bound, lower_stability_bound = ss_target * percentage, ss_target * (1.0 - percentage)
-        else:
-            upper_stability_bound, lower_stability_bound = ss_target * (1.0 - percentage), ss_target * percentage
-
-        settling_time = np.argmax(lower_stability_bound < theta_reverse < upper_stability_bound)
+        upper_stability_bound, lower_stability_bound = ss_target + tol, ss_target - tol
+        theta_reverse_bool = [int(lower_stability_bound < i < upper_stability_bound) for i in theta_reverse]
+        theta_reverse_bool = np.array(theta_reverse_bool)
+        settling_time = np.argmin(theta_reverse_bool)
         settling_time = self.timesteps - settling_time
         return settling_time
 
@@ -173,7 +187,22 @@ class TrajectoryPath(object):
             np.ndarray of the control theory metrics
         """
         # TODO: test and debug the other control metrics
-        return self._ss()
+        ss_reached, ss_error = self._ss()
+
+        overshoot = self._overshoot(ss_reached)
+        undershoot = self._undershoot(ss_reached)
+        if overshoot is not None and undershoot is not None:
+            shoot = max(abs(overshoot), abs(undershoot))
+        elif overshoot is not None and undershoot is None:
+            shoot = abs(overshoot)
+        elif overshoot is None and undershoot is not None:
+            shoot = abs(undershoot)
+        else:
+            shoot = None
+
+        settle_time = self._settle_time(ss_target=ss_error, tol=np.pi / 180)
+
+        return ss_reached, [ss_error, shoot, settle_time]
 
 
 @gin.configurable
@@ -207,7 +236,7 @@ class StatePlotter(TrajectoryPath):
         thetas = self.traj2theta(obs_idx=self.obs_idx, acos=self.acos)
         ratios = self.traj2info()
 
-        fig, ax1 = plt.subplots(figsize=(6, 4))
+        fig, ax1 = plt.subplots(figsize=(4, 3))
 
         # Plot theta
         ln1 = ax1.plot(np.arange(self.timesteps), thetas, color='royalblue', label='\u03B8')
@@ -217,44 +246,26 @@ class StatePlotter(TrajectoryPath):
 
         # Plot linear ratio
         ax2 = ax1.twinx()
-        ln2 = ax2.plot(np.arange(self.timesteps), ratios, color='darkorange', label='Controller Ratio')
+        ln2 = ax2.plot(np.arange(self.timesteps), ratios, color='darkorange', label='Relevance r(x)')
         ax2.set_ylim(0.0, 1.0)
-        ax2.set_ylabel(f'Linear Controller Ratio')
+        ax2.set_ylabel(f'Relevance r(x)')
         ax2.grid(False)
 
         # Set legend and format
         lns = ln1 + ln2
         labs = [l.get_label() for l in lns]
         ax1.legend(lns, labs, loc=7)
-        ax1.set_title(f'\u03B8 and Linear Controller Ratio')
+        ax1.set_title(f'State \u03B8 and Relevance r(x)')
         fig.show()
 
 
 @gin.configurable
-class ControlMetricsPlotter(TrajectoryPath):
+class TransientResponsePlotter(TrajectoryPath):
     # Plot the impulse and step response of all environments, with respective controllers
     def __init__(self, envs_names: List[str]):
         super().__init__()
         self.envs_names = envs_names
         self.graphs_num = len(envs_names)
-
-    def _init_env(self, env_name: str):
-        self.env_name = env_name
-        # Depending on the env, sin(theta) or state of interest is located at different obs_idx
-        if self.env_name == 'Pendulum':
-            self.asin = True
-            self.acos = False
-            self.obs_idx = 1
-        elif self.env_name == 'Cartpole':
-            self.asin = True
-            self.acos = False
-            self.obs_idx = 3
-        elif self.env_name == 'Mountaincar':
-            self.asin = False
-            self.acos = False
-            self.obs_idx = 0
-        else:
-            raise Exception(f'--- Error: Wrong env in {self} ---')
 
     def __call__(self, all_trajectories_list: List[dict], num_episodes: int = 1) -> None:
         '''
@@ -264,14 +275,13 @@ class ControlMetricsPlotter(TrajectoryPath):
         Output:
             control theory metrics
         '''
-        fig, axs = plt.subplots(len(all_trajectories_list), self.graphs_num, figsize=(self.graphs_num * 4, 5))
+        fig, axs = plt.subplots(len(all_trajectories_list), self.graphs_num, figsize=(self.graphs_num * 3, 4))
 
         for j, all_trajectories in enumerate(all_trajectories_list):
             for i, env_name in enumerate(self.envs_names):
                 self._init_env(env_name)
 
                 cur_axis = axs[j][i]
-                lns, labs = [], []
 
                 for controller in all_trajectories[self.env_name]:
                     # all_trajectories[self.env_name] contains all the trajectories for the env
@@ -281,13 +291,8 @@ class ControlMetricsPlotter(TrajectoryPath):
                         thetas = self.traj2theta(obs_idx=self.obs_idx, asin=self.asin)
 
                         # Plot theta
-                        ln = cur_axis.plot(np.arange(self.timesteps), thetas, color=self.color_dict[controller],
-                                           alpha=1.0, label=self.label_dict[controller])
-
-                        metrics = self._obtain_metrics()
-                        print(f'{controller} {metrics}')
-
-                        lns = lns + ln
+                        label = self.label_dict[controller] if i==0 and j==0 else None
+                        cur_axis.plot(np.arange(self.timesteps), thetas, color=self.color_dict[controller], label=label)
 
                 # Set legend and format
                 cur_axis.set_xlabel('Timesteps')
@@ -295,16 +300,62 @@ class ControlMetricsPlotter(TrajectoryPath):
                     cur_axis.set_ylabel(f'Impulse response \u03B8 (\u00B0)')
                 elif i == 0 and j == 1:
                     cur_axis.set_ylabel(f'Step response \u03B8 (\u00B0)')
-                # if env_name == 'Pendulum' or env_name == 'Cartpole':
-                #     cur_axis.set_ylim(-2.0, 2.0)
-                # elif env_name == 'Mountaincar':
-                #     cur_axis.set_ylim(-0.05, 0.05)
-                labs = [l.get_label() for l in lns]
-                cur_axis.legend(lns, labs)
                 if j == 0:
                     cur_axis.set_title(f'{self.env_name}')
 
+        fig.legend(loc=8, ncol=3)
+        fig.tight_layout()
+        fig.subplots_adjust(bottom=0.2)
         fig.show()
+
+
+@gin.configurable
+class MetricsCalculator(TrajectoryPath):
+    # Plot the impulse and step response of all environments, with respective controllers
+    def __init__(self, envs_names: List[str]):
+        super().__init__()
+        self.envs_names = envs_names
+        self.graphs_num = len(envs_names)
+
+    def __call__(self, all_trajectories: dict, num_episodes: int = 1) -> None:
+        '''
+        Input:
+            all_trajectories_list: a list of dict of trajectories for all envs
+            num_episodes: number of evaluative episodes
+        Output:
+            control theory metrics
+        '''
+        for i, env_name in enumerate(self.envs_names):
+            self._init_env(env_name)
+
+            for controller in all_trajectories[self.env_name]:
+                controller_metrics = None
+
+                # all_trajectories[self.env_name] contains all the trajectories for the env
+                trajectories = all_trajectories[self.env_name][controller]
+                for trajectory in trajectories:
+                    super()._helper(trajectory, num_episodes)
+                    thetas = self.traj2theta(obs_idx=self.obs_idx, asin=self.asin)
+
+                    ss_reached, metrics = self._obtain_metrics()
+                    if ss_reached:
+                        metrics = np.array(metrics)
+                        x = np.zeros((len(metrics),), dtype=float)
+                        metrics = np.vstack((x, metrics))
+                        metrics = AwardCurve(metrics)
+                        if controller_metrics is None:
+                            controller_metrics = metrics
+                        else:
+                            controller_metrics.append(metrics)
+
+                # Print out average & std of metrics
+                try:
+                    means = controller_metrics.mean()
+                    stds = controller_metrics.std()
+                    for h, _ in enumerate(means):
+                        print(f'{self.env_name} {controller} {means[h]} \u00B1 {stds[h]}')
+                except AttributeError:
+                    print(f'{self.env_name} {controller} none stable')
 
 
 @gin.configurable
@@ -313,74 +364,56 @@ class RobustnessPlotter(TrajectoryPath):
         super().__init__()
         self.envs_names = envs_names
         self.graphs_num = len(envs_names)
+        self.label_dict['.*linear.*'] = 'Linear'
 
-    def _init_env(self, env_name: str):
-        self.env_name = env_name
-        # Depending on the env, sin(theta) or state of interest is located at different obs_idx
-        if self.env_name == 'Pendulum':
-            self.asin = True
-            self.acos = False
-            self.obs_idx = 1
-        elif self.env_name == 'Cartpole':
-            self.asin = True
-            self.acos = False
-            self.obs_idx = 3
-        elif self.env_name == 'Mountaincar':
-            self.asin = False
-            self.acos = False
-            self.obs_idx = 0
-        else:
-            raise Exception(f'--- Error: Wrong env in {self} ---')
+    def __call__(self, all_rewards_list: List[dict], num_episodes: int = 1) -> None:
 
-    def __call__(self, all_rewards: dict, num_episodes: int = 1) -> None:
+        fig, axs = plt.subplots(len(all_rewards_list), self.graphs_num, figsize=(self.graphs_num * 3, 4))
 
-        fig, axs = plt.subplots(1, self.graphs_num, figsize=(self.graphs_num * 4, 3))
+        for j, all_rewards in enumerate(all_rewards_list):
+            for i, env_name in enumerate(self.envs_names):
+                self._init_env(env_name)
 
-        for i, env_name in enumerate(self.envs_names):
-            self._init_env(env_name)
+                cur_axis = axs[j][i]
 
-            cur_axis = axs[i]
-            lns, labs = [], []
+                for policy_name in all_rewards[env_name]:
+                    if policy_name not in all_rewards[env_name]:
+                        break
+                    policy_rewards = all_rewards[env_name][policy_name]
+                    parameter_noises = policy_rewards.x
+                    ymean = policy_rewards.mean()
+                    yerr = policy_rewards.std()
 
-            for policy_name in all_rewards[env_name]:
-                if policy_name not in all_rewards[env_name]:
-                    break
-                policy_rewards = all_rewards[env_name][policy_name]
-                parameter_noises = policy_rewards.x * 100
-                ymean = policy_rewards.mean()
-                yerr = policy_rewards.std()
+                    # Plot ss_errors against parameter noise
+                    label = self.label_dict[policy_name] if i==0 and j==0 else None
+                    cur_axis.errorbar(parameter_noises, ymean, yerr=yerr, color=self.color_dict[policy_name],
+                                      alpha=0.7, label=label)
 
-                # super()._helper(noise_rewards, num_episodes)
-                # self.traj2theta(obs_idx=self.obs_idx, asin=self.asin)
-                # ss_reached, ss_error = self._ss()
-                # if ss_reached:
-                #     parameter_noises.append(noise * 100)
-                #     ss_errors.append(ss_error)
+                # Set legend and format
+                if j == 0:
+                    cur_axis.set_xlabel('% change in mass')
+                    cur_axis.set_title(f'{self.env_name}')
+                elif j == 1:
+                    cur_axis.set_xlabel('% change in g')
+                if i == 0:
+                    cur_axis.set_ylabel(f'Average cumulative rewards')
+                # cur_axis.set_yscale('symlog')
 
-                # Plot ss_errors against parameter noise
-                cur_axis.errorbar(parameter_noises, ymean, yerr=yerr, color=self.color_dict[policy_name],
-                                       alpha=1.0, label=self.label_dict[policy_name])
-                # lns = lns + ln
-
-            # Set legend and format
-            cur_axis.set_xlabel('Parameter noise %')
-            if i == 0:
-                cur_axis.set_ylabel(f'Average cumulative rewards')
-            # labs = [l.get_label() for l in lns]
-            cur_axis.legend()  # lns, labs
-            cur_axis.set_title(f'{self.env_name}')
-
+        fig.legend(loc=8, ncol=5)
+        fig.tight_layout()
+        fig.subplots_adjust(bottom=0.2)
         fig.show()
 
 
-class LearningCurvePlotter(object):
+class LearningCurvePlotter(TrajectoryPath):
     """
     This class plots learning curves for the entire training session from
     a list of np.arrays
     """
 
     def __init__(self):
-        pass
+        super().__init__()
+        self.label_dict['.*linear.*'] = 'Linear/DDPG_hybrid/PILCO_hybrid'
 
     def __call__(self, all_curves: dict) -> None:
         '''
@@ -392,45 +425,43 @@ class LearningCurvePlotter(object):
         self.envs_names = all_curves.keys()
         self.graphs_num = len(self.envs_names)
 
-        colors = {'ddpg_baseline': 'mediumblue', 'ddpg_hybrid': 'dodgerblue',
-                  'pilco_baseline': 'gold', 'pilco_hybrid': 'darkorange'}
         policies = [['ddpg_baseline', 'ddpg_hybrid'], ['pilco_baseline', 'pilco_hybrid']]
         rows = len(policies)
 
         # Plot graph
-        fig, axs = plt.subplots(rows, self.graphs_num, figsize=(self.graphs_num * 4, 5))
+        fig, axs = plt.subplots(rows, self.graphs_num, figsize=(self.graphs_num * 3, 4))
 
         i = 0
         for env_name in self.envs_names:
             for j in range(rows):
                 cur_axis = axs[j][i]
-                for policy_name in policies[j]:  # all_curves[env_name].keys():
+                for policy_name in policies[j]:
                     if policy_name not in all_curves[env_name]:
                         break
                     curve = all_curves[env_name][policy_name]
                     xs = curve.x
-                    # curve.normalise()
+                    curve.normalise()
                     mean = curve.mean()
                     std = curve.std()
-                    color = colors[policy_name]
-                    best = curve.best()
-                    worst = curve.worst()
+                    color = self.color_dict[policy_name]
+
                     # Plot learning curve for the current env and policy
-                    cur_axis.plot(xs, mean, color=color, label=policy_name)
-                    cur_axis.fill_between(xs, mean - std, mean + std, alpha=0.5, facecolor=color,
-                                          label=policy_name + ' \u00B1 sd')
+                    label1 = self.label_dict[policy_name] if i == 0 else None
+                    label2 = self.label_dict[policy_name] + ' \u00B1 std' if i == 0 else None
+                    cur_axis.plot(xs, mean, color=color, label=label1)
+                    cur_axis.fill_between(xs, mean - std, mean + std, alpha=0.5, facecolor=color, label=label2)
 
                 # Set legend and format
-                # cur_axis.set_ylim(0.0, 1.0)
-                # cur_axis.set_xscale('log')
                 cur_axis.set_xlabel('Interaction time (s)')
                 if i == 0:
                     cur_axis.set_ylabel('Normalised rewards')
-                cur_axis.legend()
                 if j == 0:
                     cur_axis.set_title(env_name)
             i += 1
 
+        fig.legend(loc=8, ncol=4)
+        fig.tight_layout()
+        fig.subplots_adjust(bottom=0.25)
         plt.show()
 
 
@@ -454,19 +485,10 @@ class AwardCurve(object):
     def append(self, other):
         # Append other to self
         assert len(self.x) == len(other.x), '--- Error: Different timesteps ---'
-        # if len(self.x) < len(other.x):
-        #     repeats = len(other.x) - len(self.x)
-        #     repeat_columns = np.tile(self.y[:, [-1]], repeats)
-        #     self.y = np.hstack((self.y, repeat_columns))
-        #     self.x = np.hstack((self.x, other.x[-repeats:]))
-        # elif len(self.x) > len(other.x):
-        #     repeats = len(self.x) - len(other.x)
-        #     repeat_columns = np.tile(other.y[-1], repeats)
-        #     other.y = np.hstack((other.y, repeat_columns))
         self.y = np.vstack((self.y, other.y))
 
     def h_append(self, other):
-        # Append other to self for RobustnessPlotter
+        # Append other to self
         self.x = np.hstack((self.x, other.x))
         self.y = np.hstack((self.y, other.y))
 

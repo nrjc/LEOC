@@ -6,7 +6,7 @@ import pickle
 import gin
 import numpy as np
 import tensorflow as tf
-from typing import List
+from typing import List, Union
 
 from gpflow import set_trainable
 from tf_agents.drivers import dynamic_episode_driver
@@ -52,7 +52,6 @@ class Evaluator:
         self.pickle_idx = 0
         self.eval_results = []
         self.eval_times = []
-        self.tau = TFPy2Gym(self.env).tau
         if self.pickle_dir is not None:
             self._get_pickle_idx()
 
@@ -75,16 +74,23 @@ class Evaluator:
         else:
             # find the appropriate index/name for the pickle file
             pickle_files = [f for f in listdir(self.pickle_dir) if isfile(join(self.pickle_dir, f))]
-            self.pickle_idx = max([extract_number(f) for f in pickle_files]) + 1
+            try:
+                self.pickle_idx = max([extract_number(f) for f in pickle_files]) + 1
+            except ValueError:
+                pass
 
     def _get_pickle_path(self):
         filename = str(self.pickle_idx) + '.pickle'
         return os.path.join(self.pickle_dir, filename)
 
-    def save_pickle(self):
+    def get_awardcurve(self):
         # save xy as pickle file
         xy = np.array([self.eval_times, self.eval_results])
         xy = AwardCurve(xy)
+        return xy
+
+    def save_pickle(self):
+        xy = self.get_awardcurve()
         pickle_path = self._get_pickle_path()
         with open(pickle_path, 'wb') as f:
             pickle.dump(xy, f)
@@ -92,7 +98,7 @@ class Evaluator:
         self.pickle_idx += 1
         print(f'{self.model_path} data saved to {pickle_path}')
 
-    def __call__(self, training_timesteps: int, save_model: bool = False,
+    def __call__(self, training_time: Union[int, float], save_model: bool = False,
                  impulse_input: float = 0.0, step_input: float = 0.0) -> List[Trajectory]:
         """
         Invoked after each eval_interval during training phase.
@@ -130,7 +136,7 @@ class Evaluator:
 
         # append to learning curve
         self.eval_results.append(eval_reward.numpy())
-        self.eval_times.append(training_timesteps * self.tau)
+        self.eval_times.append(training_time)
 
         return trajectories.result()
 
@@ -140,6 +146,7 @@ class DDPGTrainer(Trainer):
     def __init__(self, env: TFPyEnvironment, ddpg: DDPG, num_iterations: int = 10000, eval_interval: int = 200):
         self.ddpg = ddpg
         super().__init__(env, self.ddpg.agent.policy)
+        self.tau = TFPy2Gym(self.env).tau
         self.replay_buffer = ReplayBuffer(self.ddpg)
         self.num_iterations = num_iterations
         self.eval_interval = eval_interval
@@ -168,7 +175,7 @@ class DDPGTrainer(Trainer):
             if iteration % self.eval_interval == 0:
                 print(f'--- Iteration {iteration} ---')
                 save_model = iteration > int(self.num_iterations / 3 * 2)
-                self.evaluator(training_timesteps=iteration, save_model=save_model)
+                self.evaluator(training_time=iteration * self.tau, save_model=save_model)
 
         # Update pickle file containing eval_results
         self.evaluator.save_pickle()
@@ -185,6 +192,7 @@ class PILCOTrainer(Trainer):
         self.state_dim = self.env.observation_spec().shape[0]
         self.env = TFPy2Gym(self.env)
         self.target = self.env.target
+        self.tau = self.env.tau
         self.weights = np.array(np.diag(weights), dtype=float_type)
         self.m_init = np.array(np.reshape(m_init, (1, -1)), dtype=float_type)
         self.S_init = np.array(np.diag(S_init), dtype=float_type)
@@ -210,7 +218,7 @@ class PILCOTrainer(Trainer):
                       S_init=self.S_init)
 
         # Initial model evaluation
-        self.evaluator(training_timesteps=0, save_model=False)
+        self.evaluator(training_time=0, save_model=False)
 
         # for numerical stability, we can set the likelihood variance parameters of the GP models
         for model in pilco.mgpr.models:
@@ -234,7 +242,7 @@ class PILCOTrainer(Trainer):
             if rollouts % self.eval_interval == 0:
                 save_model = rollouts > int(self.num_rollouts / 2)
                 training_timesteps = (rollouts + initial_num_rollout) * timesteps
-                self.evaluator(training_timesteps=training_timesteps, save_model=save_model)
+                self.evaluator(training_time=training_timesteps * self.tau, save_model=save_model)
 
         # Update pickle file containing eval_results
         self.evaluator.save_pickle()
