@@ -217,10 +217,10 @@ class CartPoleEnv(gym.Env):
     def mutate_with_noise(self, noise, arg_names=None, init_position=0.0):
         self.__init__(init_position=init_position)
         if arg_names is None:
-            # arg_names = ['masscart', 'masspole']
-            arg_names = ['gravity']
+            arg_names = ['masscart', 'masspole']
+            # arg_names = ['gravity']
         for k in arg_names:
-            self.__dict__[k] = self.__dict__[k] * (1 + noise)
+            self.__dict__[k] = self.__dict__[k] * noise
 
     def control(self):
         # M := mass of cart
