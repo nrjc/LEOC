@@ -1,0 +1,30 @@
+# Shared Definitions
+import dao.envs
+type='pilco'
+load_py_env.name = 'Pendulum-v7'
+load_weight_matrix.env = @load_py_env()
+pythonenv/singleton.constructor = @load_py_env
+load_tf_py_env.env = @pythonenv/singleton()
+pythontfenv/singleton.constructor = @load_tf_py_env
+
+plotter/singleton.constructor = @StatePlotter
+StatePlotter.env = @pythonenv/singleton()
+Evaluator.plotter = @plotter/singleton()
+Evaluator.model_path = 'controllers/Pendulum/pilco_baseline'
+Evaluator.pickle_dir = 'pickle/Pendulum/pilco_baseline'
+Evaluator.eval_num_episodes = 3
+
+
+# PILCO exclusives
+
+pythonrbfcontroller/singleton.constructor = @RbfController
+RbfController.env = @pythontfenv/singleton()
+RbfController.num_basis_functions = 30
+
+PILCOTrainer.controller = @pythonrbfcontroller/singleton()
+PILCOTrainer.env = @pythontfenv/singleton()
+PILCOTrainer.weights = [2.,2.,0.3]
+PILCOTrainer.m_init = [-1.,0.,0.]
+PILCOTrainer.S_init = [0.01, 0.05, 0.01]
+PILCOTrainer.num_rollouts = 8
+PILCOTrainer.eval_interval = 1

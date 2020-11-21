@@ -1,0 +1,34 @@
+# Shared Definitions
+import dao.envs
+type='ddpg'
+load_py_env.name = 'Cartpole-v7'
+load_weight_matrix.env = @load_py_env()
+pythonenv/singleton.constructor = @load_py_env
+load_tf_py_env.env = @pythonenv/singleton()
+pythontfenv/singleton.constructor = @load_tf_py_env
+
+plotter/singleton.constructor = @StatePlotter
+StatePlotter.env = @pythonenv/singleton()
+Evaluator.plotter = None
+#Evaluator.plotter = @plotter/singleton()
+Evaluator.model_path = 'controllers/Cartpole/ddpg_hybrid'
+Evaluator.pickle_dir = 'pickle/Cartpole/ddpg_hybrid'
+Evaluator.eval_num_episodes = 3
+
+
+# DDPG exclusives
+
+ddpgsingleton/singleton.constructor = @DDPG
+
+DDPG.env = @pythontfenv/singleton()
+DDPG.actor_learning_rate = 5e-4
+DDPG.linear_controller = @LinearControllerLayer()
+LinearControllerLayer.W = @load_weight_matrix()
+LinearControllerLayer.env = @pythontfenv/singleton()
+
+ReplayBuffer.ddpg = @ddpgsingleton/singleton()
+
+DDPGTrainer.env = @pythontfenv/singleton()
+DDPGTrainer.ddpg = @ddpgsingleton/singleton()
+DDPGTrainer.num_iterations = 15000
+DDPGTrainer.eval_interval = 300

@@ -1,0 +1,31 @@
+# Shared Definitions
+import dao.envs
+type='ddpg'
+load_py_env.name = 'Pendulum-v7'
+load_weight_matrix.env = @load_py_env()
+pythonenv/singleton.constructor = @load_py_env
+load_tf_py_env.env = @pythonenv/singleton()
+pythontfenv/singleton.constructor = @load_tf_py_env
+
+plotter/singleton.constructor = @StatePlotter
+StatePlotter.env = @pythonenv/singleton()
+Evaluator.plotter = @plotter/singleton()
+Evaluator.model_path = 'controllers/Pendulum/ddpg_baseline'
+Evaluator.pickle_dir = 'pickle/Pendulum/ddpg_baseline'
+Evaluator.eval_num_episodes = 3
+
+
+# DDPG exclusives
+
+ddpgsingleton/singleton.constructor = @DDPG
+
+DDPG.env = @pythontfenv/singleton()
+DDPG.linear_controller = None # Uncomment this and comment above to switch between normal DDPG and our upgraded version
+DDPG.actor_learning_rate = 5e-4
+
+ReplayBuffer.ddpg = @ddpgsingleton/singleton()
+
+DDPGTrainer.env = @pythontfenv/singleton()
+DDPGTrainer.ddpg = @ddpgsingleton/singleton()
+DDPGTrainer.num_iterations = 10000
+DDPGTrainer.eval_interval = 200

@@ -1,0 +1,29 @@
+# Shared Definitions
+import dao.envs
+type='pilco'
+load_py_env.name = 'Cartpole-v7'
+load_weight_matrix.env = @load_py_env()
+pythonenv/singleton.constructor = @load_py_env
+load_tf_py_env.env = @pythonenv/singleton()
+pythontfenv/singleton.constructor = @load_tf_py_env
+
+plotter/singleton.constructor = @StatePlotter
+StatePlotter.env = @pythonenv/singleton()
+Evaluator.plotter = @plotter/singleton()
+Evaluator.model_path = 'controllers/Cartpole/pilco_baseline'
+Evaluator.pickle_dir = 'pickle/Cartpole/pilco_baseline'
+Evaluator.eval_num_episodes = 3
+
+
+# PILCO exclusives
+
+pythonrbfcontroller/singleton.constructor = @RbfController
+RbfController.env = @pythontfenv/singleton()
+
+PILCOTrainer.controller = @pythonrbfcontroller/singleton()
+PILCOTrainer.env = @pythontfenv/singleton()
+PILCOTrainer.weights = [2.0, 0.3, 2.0, 2.0, 0.3]
+PILCOTrainer.m_init = [0.0, 0.0, -1.0, 0.0, 0.0]
+PILCOTrainer.S_init = [0.01, 0.01, 0.01, 0.05, 0.01]
+PILCOTrainer.num_rollouts = 10
+PILCOTrainer.eval_interval = 1
