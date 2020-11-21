@@ -48,7 +48,6 @@ def load_learning_curves(envs_names: List[str], policies: List[str]) -> dict:
                         policy_curves = data  # policy_curves is an AwardCurve object for the current policy
                     else:
                         policy_curves.append(data)  # policy_curves is an AwardCurve object for the current policy
-                    # print(f'{policy} {filename} {len(data.x)}')
 
             env_curves[policy] = policy_curves
         all_curves[env_name] = env_curves
@@ -60,36 +59,6 @@ if __name__ == "__main__":
     policies = ['ddpg_baseline', 'ddpg_hybrid', 'pilco_baseline', 'pilco_hybrid']
 
     myLearningCurveDict = load_learning_curves(envs_names, policies)
-
     myPlotter = LearningCurvePlotter()
     myPlotter(myLearningCurveDict)
-
-    # for env_name in envs_names:
-    #     for policy in policies:
-    #         idx = 1
-    #         directory = os.path.join('pickle/controllers', env_name, policy)
-    #         if os.path.exists(directory):
-    #             filename = os.path.join(directory, '00.pickle')
-    #             xy_list = load_pickle(filename)
-    #             for xy in xy_list:
-    #                 (x,y) = xy
-    #                 data = np.array([x,y])
-    #                 print(data)
-    #                 data = AwardCurve(data)
-    #                 save_path = os.path.join('pickle/controllers', env_name, policy, str(idx) + '.pickle')
-    #                 with open(save_path, 'wb') as f:
-    #                     pickle.dump(data, f)
-    #                 print(f'pickle saved to {save_path}')
-    #                 idx += 1
-    #         else:
-    #             print(f'{directory} does not exist')
-
-    # dataDict = load_pickle('resultsnccapel.pickle')
-    # for key in dataDict:
-    #     directory = os.path.join('pickle', key)
-    #     if not os.path.exists(directory):
-    #         os.makedirs(directory)
-    #     path = os.path.join('pickle', key, '00.pickle')
-    #     with open(path, 'wb') as f:
-    #         pickle.dump(dataDict[key], f)
 
