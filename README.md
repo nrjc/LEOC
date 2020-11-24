@@ -81,7 +81,7 @@ The experimental sections 5 & 6 of the paper require the trained baseline PILCO 
 Since there are three environments, each of which sees a baseline and a hybrid policy in the PILCO and DDPG frameworks, in addition to a linear controller, there are therefore altogether `3 x (2 x 2 + 1) = 15` policies. Each of these policies is configured in a `.gin` file.
 
 ```mermaid
-  graph TD
+graph TD
     env[Pendulum / CartPole / MountainCar environment] --> linear1[Linear]
     env[Pendulum / CartPole / MountainCar environment] --> baseline1a[Baseline]
     env[Pendulum / CartPole / MountainCar environment] --> hybrid1a[Hybrid]
