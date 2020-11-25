@@ -119,9 +119,9 @@ Analogous commands to train other controllers could be run with the respective `
 
 #### Demos
 The trained stable policies in each of the experimental environments would behave like the following:
-<video controls="controls" src="resources/pendulum.mov" width="400"></video>
-<video controls="controls" src="resources/cartpole.mov" width="400"></video>
-<video controls="controls" src="resources/mountaincar.mov" width="400"></video>
+<img src="resources/pendulum.gif" alt="drawing" width="400"/>
+<img src="resources/cartpole.gif" alt="drawing" width="400"/>
+<img src="resources/mountaincar.gif" alt="drawing" width="400"/>
 
 #### Rewards curve: Figure 6
 When the policies are trained, their training rewards have been dumped in the `pickle` folder. To visualise these rewards, run
