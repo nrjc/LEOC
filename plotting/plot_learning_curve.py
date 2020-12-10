@@ -17,6 +17,26 @@ def load_pickle(pickle_path: str):
         raise Exception('--- Error: No pickle file found! ---')
 
 
+def load_directory(directory: str):
+    policy_curves = None
+
+    # organise all the learning curves associated with the env and policy
+    for file in os.scandir(directory):
+        filename = file.name
+        if filename.endswith('.pickle'):  # ignore non pickle files
+            # load a single LearningCurve into memory
+            path = os.path.join(directory, filename)
+            data = load_pickle(path)
+
+            # organise learning_curves for the current policy
+            if policy_curves is None:
+                policy_curves = data  # policy_curves is an AwardCurve object for the current policy
+            else:
+                policy_curves.append(data)  # policy_curves is an AwardCurve object for the current policy
+
+    return policy_curves
+
+
 def load_learning_curves(envs_names: List[str], policies: List[str]) -> dict:
     '''
     Load a dict of dict of AwardCurves from a pickle directory
@@ -29,25 +49,12 @@ def load_learning_curves(envs_names: List[str], policies: List[str]) -> dict:
         env_curves = {}  # dict containing learning curves for the current env
 
         for policy in policies:
-            policy_curves = None
             # check the env and policy combination exists
             directory = os.path.join('pickle', env_name, policy)
             if not os.path.exists(directory):
                 break
 
-            # organise all the learning curves associated with the env and policy
-            for file in os.scandir(directory):
-                filename = file.name
-                if filename.endswith('.pickle') and filename != '0.pickle' and filename != '00.pickle':  # ignore non pickle files
-                    # load a single LearningCurve into memory
-                    path = os.path.join(directory, filename)
-                    data = load_pickle(path)
-
-                    # organise learning_curves for the current policy
-                    if policy_curves is None:
-                        policy_curves = data  # policy_curves is an AwardCurve object for the current policy
-                    else:
-                        policy_curves.append(data)  # policy_curves is an AwardCurve object for the current policy
+            policy_curves = load_directory(directory)
 
             env_curves[policy] = policy_curves
         all_curves[env_name] = env_curves

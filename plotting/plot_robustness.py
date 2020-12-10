@@ -15,6 +15,33 @@ from plotting.plotter import RobustnessPlotter
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
 
+def load_directory(env_dir: str, eval_env: TFPyEnvironment, policy: str, noises: List[float], param_arg: List[str]):
+    policy_rewards = None
+
+    foldernames = [f for f in listdir(env_dir) if f.startswith(policy)]
+    for model_folder in foldernames:
+        print(f'{env_dir} {policy} testing {model_folder}')
+
+        # load a controller into memory
+        model_path = os.path.join(env_dir, model_folder)
+        myEvaluator = Evaluator(eval_env=eval_env, policy=None, model_path=model_path)
+        myEvaluator.load_policy()
+
+        for noise in noises:
+            init_position = np.random.uniform(-np.pi * 1 / 180, np.pi * 1 / 180)
+            TFPy2Gym(eval_env).mutate_with_noise(noise=noise, arg_names=param_arg, init_position=init_position)
+            myEvaluator(training_time=int(noise * 100), save_model=False)
+
+        reward = myEvaluator.get_awardcurve()
+        # organise awards for the current policy
+        if policy_rewards is None:
+            policy_rewards = reward  # policy_rewards is an AwardCurve object for the current policy
+        else:
+            policy_rewards.append(reward)  # policy_rewards is an AwardCurve object for the current policy
+
+    return policy_rewards
+
+
 def get_robustness(envs_names: List[str], envs: List[TFPyEnvironment], policies: List[str],
                    noises: List[float], param_args: List[List[str]]) -> dict:
     all_rewards = {}  # a dict of dict containing awards for all envs
@@ -25,29 +52,7 @@ def get_robustness(envs_names: List[str], envs: List[TFPyEnvironment], policies:
         env_dir = os.path.join('controllers', env_name)
 
         for policy in policies:
-            policy_rewards = None
-
-            foldernames = [f for f in listdir(env_dir) if f.startswith(policy)]
-            for model_folder in foldernames:
-                print(f'{env_name} {policy} testing {model_folder}')
-
-                # load a controller into memory
-                model_path = os.path.join(env_dir, model_folder)
-                myEvaluator = Evaluator(eval_env=envs[i], policy=None, plotter=None, model_path=model_path,
-                                        eval_num_episodes=1)
-                myEvaluator.load_policy()
-
-                for noise in noises:
-                    init_position = np.random.uniform(-np.pi * 1 / 180, np.pi * 1 / 180)
-                    TFPy2Gym(envs[i]).mutate_with_noise(noise=noise, arg_names=param_args[i], init_position=init_position)
-                    myEvaluator(training_time=int(noise * 100), save_model=False)
-
-                data = myEvaluator.get_awardcurve()
-                # organise awards for the current policy
-                if policy_rewards is None:
-                    policy_rewards = data  # policy_rewards is an AwardCurve object for the current policy
-                else:
-                    policy_rewards.append(data)  # policy_rewards is an AwardCurve object for the current policy
+            policy_rewards = load_directory(env_dir, envs[i], policy, noises, param_args[i])
 
             env_rewards[policy] = policy_rewards
         all_rewards[env_name] = env_rewards

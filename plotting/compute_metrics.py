@@ -14,6 +14,24 @@ from plotting.plotter import MetricsCalculator
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
 
+def load_directory(env_dir: str, eval_env: TFPyEnvironment, policy: str, impulse_input=0.0, step_input=0.0):
+    policy_trajectories = []
+
+    foldernames = [f for f in listdir(env_dir) if f.startswith(policy)]
+    for model_folder in foldernames:
+        print(f'{env_dir} {policy} testing {model_folder}')
+
+        # load a controller into memory
+        model_path = os.path.join(env_dir, model_folder)
+        myEvaluator = Evaluator(eval_env=eval_env, policy=None, model_path=model_path)
+        myEvaluator.load_policy()
+
+        trajectory = myEvaluator(training_time=0, save_model=False, impulse_input=impulse_input, step_input=step_input)
+        policy_trajectories.append(trajectory)
+
+    return policy_trajectories
+
+
 def get_metrics(envs_names: List[str], envs: List[TFPyEnvironment], policies: List[str],
                 impulse_input=0.0, step_input=0.0) -> dict:
     all_trajectories = {}  # a dict of dict containing awards for all envs
@@ -24,21 +42,8 @@ def get_metrics(envs_names: List[str], envs: List[TFPyEnvironment], policies: Li
         env_dir = os.path.join('controllers', env_name)
 
         for policy in policies:
-            policy_trajectories = []
-
-            foldernames = [f for f in listdir(env_dir) if f.startswith(policy)]
-            for model_folder in foldernames:
-                print(f'{env_name} {policy} testing {model_folder}')
-
-                # load a controller into memory
-                model_path = os.path.join(env_dir, model_folder)
-                myEvaluator = Evaluator(eval_env=envs[i], policy=None, plotter=None, model_path=model_path,
-                                        eval_num_episodes=1)
-                myEvaluator.load_policy()
-
-                trajectory = myEvaluator(training_time=0, save_model=False,
-                                         impulse_input=impulse_input, step_input=step_input)
-                policy_trajectories.append(trajectory)
+            policy_trajectories = load_directory(env_dir, envs[i], policy, impulse_input=impulse_input,
+                                                 step_input=step_input)
 
             env_trajectories[policy] = policy_trajectories
         all_trajectories[env_name] = env_trajectories

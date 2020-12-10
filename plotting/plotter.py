@@ -268,31 +268,20 @@ class TransientResponsePlotter(TrajectoryPath):
         self.graphs_num = len(envs_names)
 
     def __call__(self, all_trajectories_list: List[dict], num_episodes: int = 1) -> None:
-        '''
+        """
         Input:
             all_trajectories_list: a list of dict of trajectories for all envs
             num_episodes: number of evaluative episodes
         Output:
             control theory metrics
-        '''
+        """
         fig, axs = plt.subplots(len(all_trajectories_list), self.graphs_num, figsize=(self.graphs_num * 3, 4))
 
         for j, all_trajectories in enumerate(all_trajectories_list):
             for i, env_name in enumerate(self.envs_names):
                 self._init_env(env_name)
-
                 cur_axis = axs[j][i]
-
-                for controller in all_trajectories[self.env_name]:
-                    # all_trajectories[self.env_name] contains all the trajectories for the env
-                    trajectories = all_trajectories[self.env_name][controller]
-                    for trajectory in trajectories:
-                        super()._helper(trajectory, num_episodes)
-                        thetas = self.traj2theta(obs_idx=self.obs_idx, asin=self.asin)
-
-                        # Plot theta
-                        label = self.label_dict[controller] if i==0 and j==0 else None
-                        cur_axis.plot(np.arange(self.timesteps), thetas, color=self.color_dict[controller], label=label)
+                self._subplot(cur_axis, all_trajectories, num_episodes, i == 0 and j == 0)
 
                 # Set legend and format
                 cur_axis.set_xlabel('Timesteps')
@@ -308,6 +297,26 @@ class TransientResponsePlotter(TrajectoryPath):
         fig.subplots_adjust(bottom=0.2)
         fig.show()
 
+    def _subplot(self, cur_axis, trajectories_dict, num_episodes: int, label_bool: bool):
+        """
+        Helper function to plot a single subplot
+        :param cur_axis: the subplot object
+        :param trajectories_dict: dictionary of either impulse or step trajectories
+        :param num_episodes: num_episodes
+        :param label_bool: only label the first column of subplots
+        :return: None
+        """
+        for controller in trajectories_dict[self.env_name]:
+            # trajectories_dict[self.env_name] contains all the trajectories for the env
+            trajectories = trajectories_dict[self.env_name][controller]
+            for trajectory in trajectories:
+                super()._helper(trajectory, num_episodes)
+                thetas = self.traj2theta(obs_idx=self.obs_idx, asin=self.asin)
+
+                # Plot theta
+                label = self.label_dict[controller] if label_bool else None
+                cur_axis.plot(np.arange(self.timesteps), thetas, color=self.color_dict[controller], label=label)
+
 
 @gin.configurable
 class MetricsCalculator(TrajectoryPath):
@@ -318,44 +327,68 @@ class MetricsCalculator(TrajectoryPath):
         self.graphs_num = len(envs_names)
 
     def __call__(self, all_trajectories: dict, num_episodes: int = 1) -> None:
-        '''
+        """
         Input:
-            all_trajectories_list: a list of dict of trajectories for all envs
+            all_trajectories: a dict of dict of trajectories for all envs
             num_episodes: number of evaluative episodes
         Output:
             control theory metrics
-        '''
+        """
         for i, env_name in enumerate(self.envs_names):
             self._init_env(env_name)
+            self._controller_calc(all_trajectories, num_episodes)
 
-            for controller in all_trajectories[self.env_name]:
-                controller_metrics = None
+    def _controller_calc(self, trajectories_dict: dict, num_episodes: int):
+        """
+        Helper function to get the metrics for a controller
+        :param trajectories_dict: a dict of dict of trajectories for all envs
+        :param num_episodes: num_episodes
+        :return: None
+        """
+        for controller in trajectories_dict[self.env_name]:
+            controller_metrics = None
 
-                # all_trajectories[self.env_name] contains all the trajectories for the env
-                trajectories = all_trajectories[self.env_name][controller]
-                for trajectory in trajectories:
-                    super()._helper(trajectory, num_episodes)
-                    thetas = self.traj2theta(obs_idx=self.obs_idx, asin=self.asin)
+            # all_trajectories[self.env_name] contains all the trajectories for the env
+            trajectories = trajectories_dict[self.env_name][controller]
+            for trajectory in trajectories:
+                metrics = self._single_calc(trajectory, num_episodes)
 
-                    ss_reached, metrics = self._obtain_metrics()
-                    if ss_reached:
-                        metrics = np.array(metrics)
-                        x = np.zeros((len(metrics),), dtype=float)
-                        metrics = np.vstack((x, metrics))
-                        metrics = AwardCurve(metrics)
-                        if controller_metrics is None:
-                            controller_metrics = metrics
-                        else:
-                            controller_metrics.append(metrics)
+                # Append the metrics to the controller_metrics AwardCurve
+                if controller_metrics is None:
+                    controller_metrics = metrics
+                elif metrics is not None:
+                    controller_metrics.append(metrics)
+                else:
+                    pass
 
-                # Print out average & std of metrics
-                try:
-                    means = controller_metrics.mean()
-                    stds = controller_metrics.std()
-                    for h, _ in enumerate(means):
-                        print(f'{self.env_name} {controller} {means[h]} \u00B1 {stds[h]}')
-                except AttributeError:
-                    print(f'{self.env_name} {controller} none stable')
+            # Print out average & std of metrics
+            try:
+                means = controller_metrics.mean()
+                stds = controller_metrics.std()
+                for h, _ in enumerate(means):
+                    print(f'{self.env_name} {controller} {means[h]} \u00B1 {stds[h]}')
+            except AttributeError:
+                print(f'{self.env_name} {controller} none stable')
+
+    def _single_calc(self, trajectory: Trajectory, num_episodes: int):
+        """
+        Helper function to get the metrics from a single trajectory
+        :param trajectory: trajectory
+        :param num_episodes: num_episodes
+        :return: metrics AwardCurve or None
+        """
+        super()._helper(trajectory, num_episodes)
+        thetas = self.traj2theta(obs_idx=self.obs_idx, asin=self.asin)
+
+        ss_reached, metrics = self._obtain_metrics()
+        if ss_reached:
+            metrics = np.array(metrics)
+            x = np.zeros((len(metrics),), dtype=float)
+            metrics = np.vstack((x, metrics))
+            metrics = AwardCurve(metrics)
+            return metrics
+        else:
+            return None
 
 
 @gin.configurable
@@ -375,19 +408,7 @@ class RobustnessPlotter(TrajectoryPath):
                 self._init_env(env_name)
 
                 cur_axis = axs[j][i]
-
-                for policy_name in all_rewards[env_name]:
-                    if policy_name not in all_rewards[env_name]:
-                        break
-                    policy_rewards = all_rewards[env_name][policy_name]
-                    parameter_noises = policy_rewards.x
-                    ymean = policy_rewards.mean()
-                    yerr = policy_rewards.std()
-
-                    # Plot ss_errors against parameter noise
-                    label = self.label_dict[policy_name] if i==0 and j==0 else None
-                    cur_axis.errorbar(parameter_noises, ymean, yerr=yerr, color=self.color_dict[policy_name],
-                                      alpha=0.7, label=label)
+                self._subplot(cur_axis, all_rewards[env_name], i == 0 and j == 0)
 
                 # Set legend and format
                 if j == 0:
@@ -397,12 +418,32 @@ class RobustnessPlotter(TrajectoryPath):
                     cur_axis.set_xlabel('% change in g')
                 if i == 0:
                     cur_axis.set_ylabel(f'Average cumulative rewards')
-                # cur_axis.set_yscale('symlog')
 
         fig.legend(loc=8, ncol=5)
         fig.tight_layout()
         fig.subplots_adjust(bottom=0.2)
         fig.show()
+
+    def _subplot(self, cur_axis, rewards_dict, label_bool: bool):
+        """
+        Helper function to plot a single subplot
+        :param cur_axis: the subplot object
+        :param rewards_dict: dictionary of rewards for the env
+        :param label_bool: only label the first subplot
+        :return: None
+        """
+        for policy_name in rewards_dict:
+            if policy_name not in rewards_dict:
+                break
+            policy_rewards = rewards_dict[policy_name]
+            parameter_noises = policy_rewards.x
+            ymean = policy_rewards.mean()
+            yerr = policy_rewards.std()
+
+            # Plot ss_errors against parameter noise
+            label = self.label_dict[policy_name] if label_bool else None
+            cur_axis.errorbar(parameter_noises, ymean, yerr=yerr, color=self.color_dict[policy_name],
+                              alpha=0.7, label=label)
 
 
 class LearningCurvePlotter(TrajectoryPath):
@@ -416,40 +457,25 @@ class LearningCurvePlotter(TrajectoryPath):
         self.label_dict['.*linear.*'] = 'Linear/DDPG_hybrid/PILCO_hybrid'
 
     def __call__(self, all_curves: dict) -> None:
-        '''
+        """
         Input:
             all_curves: a dict of dict of all the rewards
             The content of the dictionary should be structured as such:
             dict[env_name][policy] = AwardCurves object for the env and policy
-        '''
+        """
         self.envs_names = all_curves.keys()
         self.graphs_num = len(self.envs_names)
 
-        policies = [['ddpg_baseline', 'ddpg_hybrid'], ['pilco_baseline', 'pilco_hybrid']]
-        rows = len(policies)
+        policies_list = [['ddpg_baseline', 'ddpg_hybrid'], ['pilco_baseline', 'pilco_hybrid']]
+        rows = len(policies_list)
 
         # Plot graph
         fig, axs = plt.subplots(rows, self.graphs_num, figsize=(self.graphs_num * 3, 4))
 
-        i = 0
-        for env_name in self.envs_names:
-            for j in range(rows):
+        for i, env_name in enumerate(self.envs_names):
+            for j, policies in enumerate(policies_list):
                 cur_axis = axs[j][i]
-                for policy_name in policies[j]:
-                    if policy_name not in all_curves[env_name]:
-                        break
-                    curve = all_curves[env_name][policy_name]
-                    xs = curve.x
-                    curve.normalise()
-                    mean = curve.mean()
-                    std = curve.std()
-                    color = self.color_dict[policy_name]
-
-                    # Plot learning curve for the current env and policy
-                    label1 = self.label_dict[policy_name] if i == 0 else None
-                    label2 = self.label_dict[policy_name] + ' \u00B1 std' if i == 0 else None
-                    cur_axis.plot(xs, mean, color=color, label=label1)
-                    cur_axis.fill_between(xs, mean - std, mean + std, alpha=0.5, facecolor=color, label=label2)
+                self._subplot(cur_axis, all_curves[env_name], policies, i == 0)
 
                 # Set legend and format
                 cur_axis.set_xlabel('Interaction time (s)')
@@ -457,12 +483,38 @@ class LearningCurvePlotter(TrajectoryPath):
                     cur_axis.set_ylabel('Normalised rewards')
                 if j == 0:
                     cur_axis.set_title(env_name)
-            i += 1
 
         fig.legend(loc=8, ncol=4)
         fig.tight_layout()
         fig.subplots_adjust(bottom=0.25)
         plt.show()
+
+    def _subplot(self, cur_axis, rewards_dict, policies: List[str], label_bool: bool):
+        """
+        Helper function to plot a single subplot
+        :param cur_axis: the subplot object
+        :param rewards_dict: dictionary of rewards for the env
+        :param policies: the list of policies in the environment
+        :param label_bool: only label the first column of subplots
+        :return: None
+        """
+        for policy_name in policies:
+            if policy_name not in rewards_dict:
+                break
+
+            curve = rewards_dict[policy_name]
+            xs = curve.x
+            curve.normalise()
+
+            mean = curve.mean()
+            std = curve.std()
+            color = self.color_dict[policy_name]
+
+            # Plot learning curve for the current env and policy
+            label1 = self.label_dict[policy_name] if label_bool else None
+            label2 = self.label_dict[policy_name] + ' \u00B1 std' if label_bool else None
+            cur_axis.plot(xs, mean, color=color, label=label1)
+            cur_axis.fill_between(xs, mean - std, mean + std, alpha=0.5, facecolor=color, label=label2)
 
 
 class RegexDict(dict):
