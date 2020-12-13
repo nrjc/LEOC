@@ -24,7 +24,7 @@ def load_directory(env_dir: str, eval_env: TFPyEnvironment, policy: str, noises:
 
         # load a controller into memory
         model_path = os.path.join(env_dir, model_folder)
-        myEvaluator = Evaluator(eval_env=eval_env, policy=None, model_path=model_path)
+        myEvaluator = Evaluator(eval_env=eval_env, policy=None, load_model_path=model_path)
         myEvaluator.load_policy()
 
         for noise in noises:

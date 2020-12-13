@@ -9,10 +9,7 @@ pythontfenv/singleton.constructor = @load_tf_py_env
 
 plotter/singleton.constructor = @StatePlotter
 StatePlotter.env = @pythonenv/singleton()
-Evaluator.plotter = None
-#Evaluator.plotter = @plotter/singleton()
-Evaluator.model_path = 'controllers/Cartpole/pilco_linear'
-Evaluator.pickle_dir = 'pickle/Cartpole/pilco_linear'
+Evaluator.plotter = @plotter/singleton()
 Evaluator.eval_num_episodes = 3
 
 

@@ -17,13 +17,13 @@ def load_pickle(pickle_path: str):
         raise Exception('--- Error: No pickle file found! ---')
 
 
-def load_directory(directory: str):
+def load_directory(directory: str, policy: str):
     policy_curves = None
 
     # organise all the learning curves associated with the env and policy
     for file in os.scandir(directory):
         filename = file.name
-        if filename.endswith('.pickle'):  # ignore non pickle files
+        if filename.startswith(policy) and filename.endswith('.pickle'):  # ignore non pickle files
             # load a single LearningCurve into memory
             path = os.path.join(directory, filename)
             data = load_pickle(path)
@@ -47,14 +47,12 @@ def load_learning_curves(envs_names: List[str], policies: List[str]) -> dict:
     # Append trajectories by env and controller
     for env_name in envs_names:
         env_curves = {}  # dict containing learning curves for the current env
+        directory = os.path.join('pickle', env_name)
+        if not os.path.exists(directory):
+            break  # check env folder exists
 
         for policy in policies:
-            # check the env and policy combination exists
-            directory = os.path.join('pickle', env_name, policy)
-            if not os.path.exists(directory):
-                break
-
-            policy_curves = load_directory(directory)
+            policy_curves = load_directory(directory, policy)
 
             env_curves[policy] = policy_curves
         all_curves[env_name] = env_curves

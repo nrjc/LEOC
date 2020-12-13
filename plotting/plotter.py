@@ -213,7 +213,7 @@ class StatePlotter(TrajectoryPath):
         self._init_env(env)
 
     def _init_env(self, env: PyEnvironment):
-        self.env_name = env.unwrapped.spec.id[:-3]
+        self.env_name = env.unwrapped.spec.id.split('-')[0]
         # Depending on the env, cos(theta) or state of interest is located at different obs_idx
         if self.env_name == 'Pendulum':
             self.acos = True
@@ -240,7 +240,10 @@ class StatePlotter(TrajectoryPath):
 
         # Plot theta
         ln1 = ax1.plot(np.arange(self.timesteps), thetas, color='royalblue', label='\u03B8')
-        ax1.set_ylim(0, 180)
+        if self.env_name == 'Mountaincar':
+            ax1.set_ylim(-180, 0)
+        else:
+            ax1.set_ylim(0, 180)
         ax1.set_xlabel('Timesteps')
         ax1.set_ylabel(f'\u03B8 (\u00B0)')
 
@@ -275,12 +278,13 @@ class TransientResponsePlotter(TrajectoryPath):
         Output:
             control theory metrics
         """
-        fig, axs = plt.subplots(len(all_trajectories_list), self.graphs_num, figsize=(self.graphs_num * 3, 4))
+        rows = len(all_trajectories_list)
+        fig, axs = plt.subplots(rows, self.graphs_num, figsize=(self.graphs_num * 3, 4))
 
         for j, all_trajectories in enumerate(all_trajectories_list):
             for i, env_name in enumerate(self.envs_names):
                 self._init_env(env_name)
-                cur_axis = axs[j][i]
+                cur_axis = axs[j][i] if rows > 1 else axs[i]
                 self._subplot(cur_axis, all_trajectories, num_episodes, i == 0 and j == 0)
 
                 # Set legend and format
@@ -400,14 +404,14 @@ class RobustnessPlotter(TrajectoryPath):
         self.label_dict['.*linear.*'] = 'Linear'
 
     def __call__(self, all_rewards_list: List[dict], num_episodes: int = 1) -> None:
-
-        fig, axs = plt.subplots(len(all_rewards_list), self.graphs_num, figsize=(self.graphs_num * 3, 4))
+        rows = len(all_rewards_list)
+        fig, axs = plt.subplots(rows, self.graphs_num, figsize=(self.graphs_num * 3, 4))
 
         for j, all_rewards in enumerate(all_rewards_list):
             for i, env_name in enumerate(self.envs_names):
                 self._init_env(env_name)
 
-                cur_axis = axs[j][i]
+                cur_axis = axs[j][i] if rows > 1 else axs[i]
                 self._subplot(cur_axis, all_rewards[env_name], i == 0 and j == 0)
 
                 # Set legend and format
@@ -474,7 +478,7 @@ class LearningCurvePlotter(TrajectoryPath):
 
         for i, env_name in enumerate(self.envs_names):
             for j, policies in enumerate(policies_list):
-                cur_axis = axs[j][i]
+                cur_axis = axs[j][i] if rows > 1 else axs[i]
                 self._subplot(cur_axis, all_curves[env_name], policies, i == 0)
 
                 # Set legend and format

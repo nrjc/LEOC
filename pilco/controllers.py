@@ -107,6 +107,7 @@ class LinearController(gpflow.Module, TFPolicy):
         self.r = 1.0
         info_spec = BoundedArraySpec((1,), float_type, minimum=0.0, maximum=1.0)
         TFPolicy.__init__(self, time_step_spec=env.time_step_spec(), action_spec=env.action_spec(), info_spec=info_spec)
+        self.policy_name = 'linear'
 
         if W is None:
             self.W = Parameter(np.random.rand(self.control_dim, self.state_dim), dtype=float_type, trainable=trainable)
@@ -180,6 +181,7 @@ class RbfController(MGPR, TFPolicy):
         for model in self.models:
             model.kernel.variance.assign(1.0)
             set_trainable(model.kernel.variance, False)
+        self.policy_name = 'pilco_baseline'
 
     def create_models(self, data):
         self.models = []
@@ -323,6 +325,7 @@ class HybridController(gpflow.Module, TFPolicy):
         self.a = Parameter(controller_location, trainable=False)
         self.S = Parameter(np.ones(self.state_dim, float_type), trainable=True, transform=positive(1e-4))
         self.r = 1.0
+        self.policy_name = 'pilco_hybrid'
 
     def compute_ratio(self, x):
         '''

@@ -10,8 +10,6 @@ pythontfenv/singleton.constructor = @load_tf_py_env
 plotter/singleton.constructor = @StatePlotter
 StatePlotter.env = @pythonenv/singleton()
 Evaluator.plotter = @plotter/singleton()
-Evaluator.model_path = 'controllers/Mountaincar/pilco_hybrid'
-Evaluator.pickle_dir = 'pickle/Mountaincar/pilco_hybrid'
 Evaluator.eval_num_episodes = 3
 
 
@@ -26,5 +24,5 @@ PILCOTrainer.env = @pythontfenv/singleton()
 PILCOTrainer.weights = [2.,0.5]
 PILCOTrainer.m_init = [-3.14,0.]
 PILCOTrainer.S_init = [0.01, 0.01]
-PILCOTrainer.num_rollouts = 8
+PILCOTrainer.num_rollouts = 2
 PILCOTrainer.eval_interval = 1

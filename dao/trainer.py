@@ -39,49 +39,61 @@ class Trainer:
 @gin.configurable
 class Evaluator:
     def __init__(self, eval_env: TFPyEnvironment, policy: TFPolicy, plotter: StatePlotter = None,
-                 model_path: str = None, pickle_dir: str = None, eval_num_episodes: int = 1):
+                 load_model_path: str = None, eval_num_episodes: int = 1):
         self.env = eval_env
         self.policy = policy
-        self.model_path = model_path
+        self.env_name = self.env.pyenv.envs[0].unwrapped.spec.id.split('-')[0]
+        self.policy_name = self.policy.policy_name
+        self.model_path = self._get_model_path()
+        self.pickle_path = self._get_pickle_path()
+        self.load_model_path = load_model_path
+
         self.best_reward = -np.finfo(float_type).max
         if self.policy is not None:
             self.saver = policy_saver.PolicySaver(self.policy, batch_size=None)
         self.eval_num_episodes = eval_num_episodes
         self.plotter = plotter
-        self.pickle_dir = pickle_dir
-        self.pickle_idx = 0
         self.eval_results = []
         self.eval_times = []
-        if self.pickle_dir is not None:
-            self._get_pickle_idx()
+
+    def _get_idx(self, directory):
+        def extract_number(f):
+            s = re.findall(f'{self.policy_name}(\d+).*', f)
+            idx = int(s[0]) if s else -1
+            return idx
+
+        # check directory exists
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+            return 0
+        else:
+            # find the appropriate index/name
+            model_files = [f for f in listdir(directory)]
+            try:
+                return max([extract_number(f) for f in model_files]) + 1
+            except ValueError:
+                return 0
 
     def load_policy(self):
-        self.policy = tf.compat.v2.saved_model.load(self.model_path)
+        if self.load_model_path:
+            self.policy = tf.compat.v2.saved_model.load(self.load_model_path)
+            print(f'Loaded policy {self.load_model_path}')
+
+    def _get_model_path(self):
+        model_dir = os.path.join('controllers', self.env_name)
+        idx = self._get_idx(model_dir)
+        foldername = self.policy_name + str(idx)
+        return os.path.join(model_dir, foldername)
 
     def save_policy(self):
         self.saver.save(self.model_path)
         print(f'Policy saved at {self.model_path}')
 
-    def _get_pickle_idx(self):
-        def extract_number(f):
-            s = re.findall('(\d+).pickle', f)
-            idx = int(s[0]) if s else -1
-            return idx
-
-        # check pickle directory exists
-        if not os.path.exists(self.pickle_dir):
-            os.makedirs(self.pickle_dir)
-        else:
-            # find the appropriate index/name for the pickle file
-            pickle_files = [f for f in listdir(self.pickle_dir) if isfile(join(self.pickle_dir, f))]
-            try:
-                self.pickle_idx = max([extract_number(f) for f in pickle_files]) + 1
-            except ValueError:
-                pass
-
     def _get_pickle_path(self):
-        filename = str(self.pickle_idx) + '.pickle'
-        return os.path.join(self.pickle_dir, filename)
+        pickle_dir = os.path.join('pickle', self.env_name)
+        idx = self._get_idx(pickle_dir)
+        filename = self.policy_name + str(idx) + '.pickle'
+        return os.path.join(pickle_dir, filename)
 
     def get_awardcurve(self):
         # save xy as pickle file
@@ -91,12 +103,9 @@ class Evaluator:
 
     def save_pickle(self):
         xy = self.get_awardcurve()
-        pickle_path = self._get_pickle_path()
-        with open(pickle_path, 'wb') as f:
+        with open(self.pickle_path, 'wb') as f:
             pickle.dump(xy, f)
-
-        self.pickle_idx += 1
-        print(f'{self.model_path} data saved to {pickle_path}')
+        print(f'{self.policy_name} rewards saved to {self.pickle_path}')
 
     def __call__(self, training_time: Union[int, float], save_model: bool = False,
                  impulse_input: float = 0.0, step_input: float = 0.0) -> List[Trajectory]:
@@ -123,7 +132,7 @@ class Evaluator:
         final_time_step, _ = driver.run(policy_state=())
 
         eval_reward = avg_reward.result()
-        print(f'Evaluator eval_reward = {eval_reward}, on average of {self.eval_num_episodes} episodes. Controller at {self.model_path}')
+        print(f'Evaluator eval_reward = {int(eval_reward)}, on average of {self.eval_num_episodes} episodes.')
 
         # save model
         if save_model and eval_reward > self.best_reward:

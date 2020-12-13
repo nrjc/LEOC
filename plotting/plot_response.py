@@ -18,7 +18,7 @@ def load_directory(env_dir: str, eval_env: TFPyEnvironment, policy: str, impulse
     foldernames = [f for f in listdir(env_dir) if f.startswith(policy)]
     for model_folder in foldernames:
         model_path = os.path.join(env_dir, model_folder)
-        myEvaluator = Evaluator(eval_env=eval_env, policy=None, model_path=model_path)
+        myEvaluator = Evaluator(eval_env=eval_env, policy=None, load_model_path=model_path)
         myEvaluator.load_policy()
         trajectory = myEvaluator(training_time=0, save_model=False, impulse_input=impulse_input, step_input=step_input)
         policy_trajectories.append(trajectory)

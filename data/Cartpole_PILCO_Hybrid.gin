@@ -1,6 +1,5 @@
 # Shared Definitions
 import dao.envs
-type='pilco'
 load_py_env.name = 'Cartpole-v7'
 load_weight_matrix.env = @load_py_env()
 pythonenv/singleton.constructor = @load_py_env
@@ -9,10 +8,7 @@ pythontfenv/singleton.constructor = @load_tf_py_env
 
 plotter/singleton.constructor = @StatePlotter
 StatePlotter.env = @pythonenv/singleton()
-Evaluator.plotter = None
-#Evaluator.plotter = @plotter/singleton()
-Evaluator.model_path = 'controllers/Cartpole/pilco_hybrid'
-Evaluator.pickle_dir = 'pickle/Cartpole/pilco_hybrid'
+Evaluator.plotter = @plotter/singleton()
 Evaluator.eval_num_episodes = 3
 
 

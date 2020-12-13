@@ -124,6 +124,10 @@ class MyActorPolicy(actor_policy.ActorPolicy):
     def __init__(self, **kwargs):
         info_spec = BoundedArraySpec((1,), float_type, minimum=0.0, maximum=1.0)
         super().__init__(info_spec=info_spec, **kwargs)
+        if self._actor_network.linear_controller is None:
+            self.policy_name = 'ddpg_baseline'
+        else:
+            self.policy_name = 'ddpg_hybrid'
 
     def _distribution(self, time_step, policy_state):
         policy_step_super = super()._distribution(time_step, policy_state)
