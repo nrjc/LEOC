@@ -43,7 +43,7 @@ metakernel==0.24.4
 mistune==0.8.4
 more-itertools==8.4.0
 multipledispatch==0.6.0
-numpy==1.18.5
+numpy==1.22.0
 oauthlib==3.1.0
 oct2py==5.0.4
 octave-kernel==0.32.0
